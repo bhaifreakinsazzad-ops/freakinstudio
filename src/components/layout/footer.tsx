@@ -39,6 +39,11 @@ export function Footer() {
                 </Link>
               </li>
               <li>
+                <Link href="/how-it-works" className="hover:text-brand-light transition-colors">
+                  How It Works
+                </Link>
+              </li>
+              <li>
                 <Link href="/portfolio" className="hover:text-brand-light transition-colors">
                   Portfolio Showcase
                 </Link>
@@ -51,10 +56,25 @@ export function Footer() {
             </ul>
           </div>
 
-          {/* Operating Environments */}
+          {/* Studio & Support */}
           <div className="space-y-3">
-            <h4 className="font-mono text-xs uppercase tracking-wider text-brand-light font-semibold">Workspaces</h4>
+            <h4 className="font-mono text-xs uppercase tracking-wider text-brand-light font-semibold">Studio</h4>
             <ul className="space-y-2 text-xs font-mono text-brand-muted">
+              <li>
+                <Link href="/about" className="hover:text-brand-light transition-colors">
+                  About Us
+                </Link>
+              </li>
+              <li>
+                <Link href="/contact" className="hover:text-brand-light transition-colors">
+                  Contact &amp; Desk
+                </Link>
+              </li>
+              <li>
+                <Link href="/faq" className="hover:text-brand-light transition-colors">
+                  FAQ
+                </Link>
+              </li>
               <li>
                 <Link href="/dashboard" className="hover:text-brand-light transition-colors">
                   Client Portal
@@ -63,16 +83,6 @@ export function Footer() {
               <li>
                 <Link href="/admin" className="hover:text-brand-light transition-colors">
                   Studio Admin OS
-                </Link>
-              </li>
-              <li>
-                <Link href="/login" className="hover:text-brand-light transition-colors">
-                  Sign In
-                </Link>
-              </li>
-              <li>
-                <Link href="/signup" className="hover:text-brand-light transition-colors">
-                  Create Client Account
                 </Link>
               </li>
             </ul>
