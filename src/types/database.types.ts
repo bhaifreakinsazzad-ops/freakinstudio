@@ -479,9 +479,115 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["audit_logs"]["Insert"]>;
         Relationships: [];
       };
+      delivery_events: {
+        Row: {
+          id: string;
+          project_id: string;
+          downloaded_by: string | null;
+          asset_ids: string[];
+          manifest: Json;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          project_id: string;
+          downloaded_by?: string | null;
+          asset_ids: string[];
+          manifest?: Json;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["delivery_events"]["Insert"]>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      create_quotation_request: {
+        Args: {
+          p_client_id: string;
+          p_scope: Json;
+          p_items: Json;
+          p_currency: string;
+          p_estimated_bdt?: number;
+          p_estimated_usd?: number;
+          p_terms_accepted?: boolean;
+        };
+        Returns: {
+          ok: boolean;
+          quote_id?: string;
+          quote_ref?: string;
+          error?: string;
+        };
+      };
+      create_pending_order: {
+        Args: {
+          p_client_id: string;
+          p_quote_id: string | null;
+          p_order_ref: string;
+          p_currency: string;
+          p_scope: Json;
+          p_items: Json;
+          p_is_test?: boolean;
+          p_amount?: number;
+          p_amount_bdt?: number;
+          p_amount_usd?: number;
+        };
+        Returns: {
+          ok: boolean;
+          order_id?: string;
+          order_ref?: string;
+          amount?: number;
+          currency?: string;
+          error?: string;
+        };
+      };
+      settle_verified_payment: {
+        Args: {
+          p_order_ref: string;
+          p_gateway: string;
+          p_transaction_ref: string;
+          p_amount: number;
+          p_currency: string;
+          p_channel?: string;
+          p_payload?: Json;
+        };
+        Returns: {
+          ok: boolean;
+          order_id?: string;
+          project_id?: string;
+          payment_id?: string;
+          already_settled?: boolean;
+          error?: string;
+        };
+      };
+      submit_project_brief: {
+        Args: {
+          p_project_id: string;
+          p_answers: Json;
+          p_client_id: string;
+        };
+        Returns: {
+          ok: boolean;
+          project_id?: string;
+          error?: string;
+        };
+      };
+      approve_project_asset: {
+        Args: {
+          p_project_id: string;
+          p_asset_id: string;
+          p_client_id: string;
+          p_legal_accepted?: boolean;
+          p_notes?: string;
+        };
+        Returns: {
+          ok: boolean;
+          approval_id?: string;
+          project_status?: string;
+          error?: string;
+        };
+      };
+    };
     Enums: {
       user_role: UserRole;
       pricing_status: PricingStatus;

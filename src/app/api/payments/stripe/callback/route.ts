@@ -94,7 +94,7 @@ export async function GET(request: Request) {
 
     if (validation.verified && validation.status === "paid") {
       // Execute trusted settlement RPC (Migration 10) under service_role
-      const { data: rpcRes, error: rpcErr } = await (supabase as any).rpc(
+      const { data: rpcRes, error: rpcErr } = await supabase.rpc(
         "settle_verified_payment",
         {
           p_order_ref: order.order_ref,

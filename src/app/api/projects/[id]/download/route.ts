@@ -277,7 +277,7 @@ Freakin's Studio Creative Operations & Commercial Licensing Desk
     }
 
     // Record delivery event
-    await (supabase as any).from("delivery_events").insert({
+    await supabase.from("delivery_events").insert({
       project_id: projectId,
       downloaded_by: user.id,
       asset_ids: approvedAssets.map((a) => a.id),

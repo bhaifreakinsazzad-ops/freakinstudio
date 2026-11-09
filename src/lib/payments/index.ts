@@ -1,6 +1,6 @@
-import { sslcommerz, SSLCommerzAdapter } from "./sslcommerz";
-import { stripe, StripeAdapter } from "./stripe";
-import { devTestPayment, DevTestPaymentAdapter } from "./dev-test";
+import { sslcommerz } from "./sslcommerz";
+import { stripe } from "./stripe";
+import { devTestPayment } from "./dev-test";
 import type {
   PaymentGateway,
   PaymentInitiationRequest,

@@ -4,7 +4,6 @@ import {
   getCatalogServices,
   getAllAddOns,
   getServiceById,
-  getAddOnsForService,
   getAllServiceAddOnsMap,
   getAddOnFamily,
   getServiceConfigSchema,

@@ -198,7 +198,7 @@ export async function requestQuoteAction(draft: PackageDraft) {
 
     // Execute trusted quotation RPC (Migration 10)
     // CRITICAL SECURITY FIX (Directive 13.0 §4): Fail closed on RPC unavailability.
-    const { data: rpcRes, error: rpcErr } = await (supabase as any).rpc(
+    const { data: rpcRes, error: rpcErr } = await supabase.rpc(
       "create_quotation_request",
       {
         p_client_id: user.id,
@@ -211,9 +211,7 @@ export async function requestQuoteAction(draft: PackageDraft) {
           pricing: calculatedPricing,
         } as unknown as Json,
         p_items: quoteItemsPayload as unknown as Json,
-        p_notes:
-          draft.objective?.notes ||
-          "Lodged via 7-Step Signature Package Builder",
+        p_terms_accepted: true,
       }
     );
 
@@ -323,7 +321,7 @@ export async function createOrderFromBuilderAction(
 
     // Execute trusted order creation RPC (Migration 10)
     // CRITICAL SECURITY FIX (Directive 13.0 §4): Fail closed on RPC unavailability.
-    const { data: rpcOrderRes, error: rpcOrderErr } = await (supabase as any).rpc(
+    const { data: rpcOrderRes, error: rpcOrderErr } = await supabase.rpc(
       "create_pending_order",
       {
         p_client_id: user.id,
