@@ -14,7 +14,7 @@ import type {
   PricingSummary,
   PackageDraft,
 } from "@/types/domain";
-import { getServiceConfigSchema } from "@/lib/catalog";
+import { getServiceConfigSchema, getAddOnFamily } from "@/lib/catalog";
 import { calculatePricingSummary } from "@/lib/pricing/engine";
 import {
   saveLocalDraft,
@@ -24,6 +24,7 @@ import {
   saveDraftAction,
   requestQuoteAction,
   createOrderFromBuilderAction,
+  deleteDraftAction,
 } from "./actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,6 +34,8 @@ interface PackageBuilderClientProps {
   categories: ServiceCategory[];
   services: Service[];
   addOns: AddOn[];
+  serviceAddOnsMap?: Record<string, AddOn[]>;
+  initialDrafts?: PackageDraft[];
   initialServiceId?: string;
   isAuthenticated: boolean;
 }
@@ -41,6 +44,8 @@ export function PackageBuilderClient({
   categories,
   services,
   addOns,
+  serviceAddOnsMap,
+  initialDrafts = [],
   initialServiceId,
   isAuthenticated,
 }: PackageBuilderClientProps) {
@@ -53,6 +58,22 @@ export function PackageBuilderClient({
     const existing = getLocalDraft();
     return existing?.id || `DRAFT-${Date.now()}`;
   });
+  const [savedDrafts, setSavedDrafts] = useState<PackageDraft[]>(initialDrafts);
+
+  const handleLoadDraft = (d: PackageDraft) => {
+    if (d.objective) setObjective(d.objective);
+    if (d.services && d.services.length > 0) setSelectedServices(d.services);
+    if (d.serviceConfigs) setServiceConfigs(d.serviceConfigs);
+    if (d.selectedAddOns) setSelectedAddOns(d.selectedAddOns);
+    if (d.pricing?.currency) setCurrency(d.pricing.currency);
+    toast.success("Loaded saved cloud draft: " + (d.objective?.goal ? d.objective.goal.slice(0, 30) : d.id));
+  };
+
+  const handleDeleteDraft = async (id: string) => {
+    setSavedDrafts((prev) => prev.filter((d) => d.id !== id));
+    await deleteDraftAction(id);
+    toast.success("Draft removed from cloud storage");
+  };
 
   // Step 1: Objective — initialized lazily from draft if present
   const [objective, setObjective] = useState<PackageObjective>(() => {
@@ -268,6 +289,10 @@ export function PackageBuilderClient({
       setTimeout(async () => {
         const res = await createOrderFromBuilderAction(currentDraft, checkoutGateway);
         if (res.ok && res.orderRef && res.txId) {
+          if (res.redirectUrl && !res.redirectUrl.includes("simulated=true")) {
+            window.location.href = res.redirectUrl;
+            return;
+          }
           setCheckoutPhase("success");
           setCompletedOrderData({
             orderRef: res.orderRef,
@@ -381,6 +406,40 @@ export function PackageBuilderClient({
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         {/* Main Step Canvas */}
         <div className="lg:col-span-8 space-y-6">
+          {savedDrafts.length > 0 && currentStep === 1 && (
+            <div className="p-4 rounded-2xl bg-brand-surface/90 border border-brand-border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="text-brand-highlight border-brand-highlight/30 font-mono">
+                  Saved Cloud Drafts ({savedDrafts.length})
+                </Badge>
+                <span className="text-brand-muted font-mono text-[11px]">
+                  Resume a configured package from your account.
+                </span>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {savedDrafts.map((d) => (
+                  <div key={d.id} className="flex items-center gap-1.5 bg-brand-black px-2.5 py-1 rounded-lg border border-brand-border">
+                    <button
+                      type="button"
+                      onClick={() => handleLoadDraft(d)}
+                      className="text-[11px] font-mono text-brand-light hover:text-brand-highlight font-bold"
+                    >
+                      {d.objective?.goal ? d.objective.goal.slice(0, 24) + "..." : d.id}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteDraft(d.id)}
+                      className="text-brand-muted hover:text-red-400 text-[10px] ml-1"
+                      title="Delete draft"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* STEP 1: CAMPAIGN OBJECTIVE */}
           {currentStep === 1 && (
             <div className="glass-panel p-6 sm:p-8 rounded-3xl border border-brand-border space-y-6">
@@ -811,7 +870,8 @@ export function PackageBuilderClient({
                   const srv = serviceMap.get(sid);
                   if (!srv) return null;
                   const currentSelected = selectedAddOns[sid] || [];
-                  const relatedAddOns = addOns.slice(0, 6);
+                  const serviceMappedAddOns = (serviceAddOnsMap && serviceAddOnsMap[sid]) || [];
+                  const relatedAddOns = serviceMappedAddOns.length > 0 ? serviceMappedAddOns : addOns.slice(0, 6);
 
                   return (
                     <div
@@ -850,9 +910,14 @@ export function PackageBuilderClient({
                                 >
                                   {isChecked && "✓"}
                                 </span>
-                                <span className="text-brand-light font-mono text-[11px]">
-                                  {addon.label}
-                                </span>
+                                <div className="flex flex-col text-left">
+                                  <span className="text-brand-light font-mono text-[11px]">
+                                    {addon.label}
+                                  </span>
+                                  <span className="text-[9px] font-mono text-brand-muted/70">
+                                    {getAddOnFamily(addon.label)}
+                                  </span>
+                                </div>
                               </div>
                               <span className="text-[10px] font-mono text-brand-highlight font-bold">
                                 +{currency === "BDT" ? "৳ 3,000" : "$ 25"}

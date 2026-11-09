@@ -172,6 +172,91 @@ export async function getAllAddOns(): Promise<AddOn[]> {
   return canonicalAddOns;
 }
 
+export function getAllServiceAddOnsMap(): Record<string, AddOn[]> {
+  const result: Record<string, AddOn[]> = {};
+  for (const [sid, list] of serviceAddOnsMap.entries()) {
+    result[sid] = list;
+  }
+  return result;
+}
+
+export type AddOnFamily =
+  | "Strategy & Research"
+  | "Content & Copywriting"
+  | "Creative Production"
+  | "Distribution & Adaptation"
+  | "Operations & Handover"
+  | "Commercial & Extended Scope";
+
+export function getAddOnFamily(label: string): AddOnFamily {
+  const l = label.toLowerCase();
+  if (
+    l.includes("strategy") ||
+    l.includes("audit") ||
+    l.includes("research") ||
+    l.includes("discovery") ||
+    l.includes("concept") ||
+    l.includes("persona") ||
+    l.includes("roadmap") ||
+    l.includes("matrix") ||
+    l.includes("brief")
+  ) {
+    return "Strategy & Research";
+  }
+  if (
+    l.includes("copy") ||
+    l.includes("script") ||
+    l.includes("writing") ||
+    l.includes("tagline") ||
+    l.includes("hook") ||
+    l.includes("voiceover") ||
+    l.includes("translation") ||
+    l.includes("bilingual") ||
+    l.includes("transcription")
+  ) {
+    return "Content & Copywriting";
+  }
+  if (
+    l.includes("format") ||
+    l.includes("cutdown") ||
+    l.includes("aspect") ||
+    l.includes("resize") ||
+    l.includes("adaptation") ||
+    l.includes("reels") ||
+    l.includes("story") ||
+    l.includes("platform") ||
+    l.includes("cuts") ||
+    l.includes("variant")
+  ) {
+    return "Distribution & Adaptation";
+  }
+  if (
+    l.includes("source") ||
+    l.includes("vector") ||
+    l.includes("handover") ||
+    l.includes("guideline") ||
+    l.includes("rush") ||
+    l.includes("express") ||
+    l.includes("archive") ||
+    l.includes("raw") ||
+    l.includes("package")
+  ) {
+    return "Operations & Handover";
+  }
+  if (
+    l.includes("license") ||
+    l.includes("commercial") ||
+    l.includes("copyright") ||
+    l.includes("trademark") ||
+    l.includes("extended") ||
+    l.includes("broadcast") ||
+    l.includes("print")
+  ) {
+    return "Commercial & Extended Scope";
+  }
+  return "Creative Production";
+}
+
 export interface ServiceConfigSchema {
   formatOptions: string[];
   defaultFormat: string;

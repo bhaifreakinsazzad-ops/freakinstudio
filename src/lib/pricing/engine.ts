@@ -6,6 +6,22 @@ import type {
   PricingSummary,
 } from "@/types/domain";
 
+export interface PricingPolicyConfig {
+  rushSurchargeRate: number; // e.g. 0.35 for +35%
+  maxDirectCheckoutServices: number; // e.g. 5 services max for direct checkout (0 to disable)
+  maxDirectCheckoutBDT: number; // e.g. 150000 (0 to disable)
+  maxDirectCheckoutUSD: number; // e.g. 1250 (0 to disable)
+  enableQuoteGating: boolean; // master toggle for quote requirements
+}
+
+export const DEFAULT_PRICING_POLICY: PricingPolicyConfig = {
+  rushSurchargeRate: 0.35,
+  maxDirectCheckoutServices: 5,
+  maxDirectCheckoutBDT: 150000,
+  maxDirectCheckoutUSD: 1250,
+  enableQuoteGating: true,
+};
+
 export interface PricingEngineInput {
   serviceIds: string[];
   serviceConfigs: Record<string, ServiceConfig>;
@@ -13,6 +29,7 @@ export interface PricingEngineInput {
   currency: Currency;
   catalogServices: Service[];
   catalogAddOns: AddOn[];
+  policy?: Partial<PricingPolicyConfig>;
 }
 
 export function calculatePricingSummary({
@@ -22,7 +39,13 @@ export function calculatePricingSummary({
   currency,
   catalogServices,
   catalogAddOns,
+  policy = {},
 }: PricingEngineInput): PricingSummary {
+  const activePolicy: PricingPolicyConfig = {
+    ...DEFAULT_PRICING_POLICY,
+    ...policy,
+  };
+
   const serviceMap = new Map<string, Service>();
   catalogServices.forEach((s) => serviceMap.set(s.id, s));
 
@@ -39,11 +62,15 @@ export function calculatePricingSummary({
   const quoteReasons: string[] = [];
   let quoteRequired = false;
 
-  // Gate 1: Check total service count
-  if (serviceIds.length > 5) {
+  // Gate 1: Check total service count if gating enabled
+  if (
+    activePolicy.enableQuoteGating &&
+    activePolicy.maxDirectCheckoutServices > 0 &&
+    serviceIds.length > activePolicy.maxDirectCheckoutServices
+  ) {
     quoteRequired = true;
     quoteReasons.push(
-      `Package contains ${serviceIds.length} services (exceeds standard 5-service checkout threshold). Enterprise quotation required.`
+      `Package contains ${serviceIds.length} services (exceeds standard ${activePolicy.maxDirectCheckoutServices}-service checkout threshold). Enterprise quotation required.`
     );
   }
 
@@ -69,9 +96,10 @@ export function calculatePricingSummary({
     subtotalBDT += serviceBaseBDT;
     subtotalUSD += serviceBaseUSD;
 
-    if (config.rush) {
-      const rushBDT = Math.round(serviceBaseBDT * 0.35);
-      const rushUSD = Math.round(serviceBaseUSD * 0.35 * 100) / 100;
+    if (config.rush && activePolicy.rushSurchargeRate > 0) {
+      const rushBDT = Math.round(serviceBaseBDT * activePolicy.rushSurchargeRate);
+      const rushUSD =
+        Math.round(serviceBaseUSD * activePolicy.rushSurchargeRate * 100) / 100;
       rushSurchargeBDT += rushBDT;
       rushSurchargeUSD += rushUSD;
     }
@@ -88,14 +116,24 @@ export function calculatePricingSummary({
   }
 
   const finalBDT = subtotalBDT + rushSurchargeBDT + addOnsTotalBDT;
-  const finalUSD = Math.round((subtotalUSD + rushSurchargeUSD + addOnsTotalUSD) * 100) / 100;
+  const finalUSD =
+    Math.round((subtotalUSD + rushSurchargeUSD + addOnsTotalUSD) * 100) / 100;
 
-  // Gate 2: High-value budget threshold (৳150,000 BDT or $1,250 USD)
-  if (finalBDT > 150000 || finalUSD > 1250) {
-    quoteRequired = true;
-    quoteReasons.push(
-      `Total investment (৳ ${finalBDT.toLocaleString()} / $ ${finalUSD.toLocaleString()}) exceeds the self-service checkout limit. Requires commercial review.`
-    );
+  // Gate 2: High-value budget threshold if gating enabled
+  if (activePolicy.enableQuoteGating) {
+    const bdtExceeded =
+      activePolicy.maxDirectCheckoutBDT > 0 &&
+      finalBDT > activePolicy.maxDirectCheckoutBDT;
+    const usdExceeded =
+      activePolicy.maxDirectCheckoutUSD > 0 &&
+      finalUSD > activePolicy.maxDirectCheckoutUSD;
+
+    if (bdtExceeded || usdExceeded) {
+      quoteRequired = true;
+      quoteReasons.push(
+        `Total investment (৳ ${finalBDT.toLocaleString()} / $ ${finalUSD.toLocaleString()}) exceeds the self-service checkout limit. Requires commercial review.`
+      );
+    }
   }
 
   return {

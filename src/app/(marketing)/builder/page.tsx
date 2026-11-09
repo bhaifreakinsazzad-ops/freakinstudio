@@ -5,8 +5,11 @@ import {
   getCatalogCategories,
   getCatalogServices,
   getAllAddOns,
+  getAllServiceAddOnsMap,
 } from "@/lib/catalog";
 import { createClient } from "@/lib/supabase/server";
+import type { PackageDraft } from "@/types/domain";
+import { getUserDraftsAction } from "./actions";
 import { PackageBuilderClient } from "./package-builder-client";
 
 export const metadata: Metadata = {
@@ -30,10 +33,20 @@ export default async function BuilderPage({
     getAllAddOns(),
   ]);
 
+  const serviceAddOnsMap = getAllServiceAddOnsMap();
+
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
+
+  let initialDrafts: PackageDraft[] = [];
+  if (user) {
+    const draftsRes = await getUserDraftsAction();
+    if (draftsRes.ok && draftsRes.drafts) {
+      initialDrafts = draftsRes.drafts;
+    }
+  }
 
   return (
     <>
@@ -56,6 +69,8 @@ export default async function BuilderPage({
             categories={categories}
             services={services}
             addOns={addOns}
+            serviceAddOnsMap={serviceAddOnsMap}
+            initialDrafts={initialDrafts}
             initialServiceId={initialServiceId}
             isAuthenticated={!!user}
           />

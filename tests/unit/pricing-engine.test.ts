@@ -161,6 +161,40 @@ describe("Server-Authoritative Pricing Engine", () => {
 
     expect(summary.subtotalBDT).toBe(165000);
     expect(summary.quoteRequired).toBe(true);
-    expect(summary.quoteReasons.some((r) => r.includes("exceeds the self-service checkout limit"))).toBe(true);
+    expect(
+      summary.quoteReasons.some((r) =>
+        r.includes("exceeds the self-service checkout limit")
+      )
+    ).toBe(true);
+  });
+
+  it("respects administrative pricing policy overrides for rush surcharge rate", () => {
+    const summary = calculatePricingSummary({
+      serviceIds: ["A01"],
+      serviceConfigs: { A01: { quantity: 1, rush: true } },
+      selectedAddOns: {},
+      currency: "BDT",
+      catalogServices: mockServices,
+      catalogAddOns: mockAddOns,
+      policy: { rushSurchargeRate: 0.2 }, // 20% override instead of default 35%
+    });
+
+    // 5500 * 0.20 = 1100
+    expect(summary.rushSurchargeBDT).toBe(1100);
+    expect(summary.finalBDT).toBe(5500 + 1100);
+  });
+
+  it("permits direct checkout of 6+ services when administrative quote gating is disabled", () => {
+    const summary = calculatePricingSummary({
+      serviceIds: ["A01", "A02", "A01", "A02", "A01", "A02"],
+      serviceConfigs: {},
+      selectedAddOns: {},
+      currency: "BDT",
+      catalogServices: mockServices,
+      catalogAddOns: mockAddOns,
+      policy: { enableQuoteGating: false },
+    });
+
+    expect(summary.quoteRequired).toBe(false);
   });
 });
