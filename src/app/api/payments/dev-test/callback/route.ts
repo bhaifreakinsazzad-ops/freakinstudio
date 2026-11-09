@@ -63,9 +63,20 @@ async function handleCallback(
     );
   }
 
-  const supabase = createPrivilegedClient();
+  // 1. Privileged Client (Fails closed if SUPABASE_SERVICE_ROLE_KEY missing)
+  let supabase;
+  try {
+    supabase = createPrivilegedClient();
+  } catch (confErr: unknown) {
+    console.error("Privileged client error in dev-test callback:", confErr);
+    return NextResponse.redirect(
+      `${baseUrl}/builder?payment=failed&error=${encodeURIComponent(
+        "Settlement service unavailable: Server credentials not configured."
+      )}`
+    );
+  }
 
-  // 1. Identify order from database first
+  // 2. Identify order from database first
   const { data: rawOrder, error: orderLookupErr } = await supabase
     .from("orders")
     .select("*")
@@ -93,7 +104,7 @@ async function handleCallback(
     );
   }
 
-  // 2. Anti-replay & Idempotent check
+  // 3. Anti-replay & Idempotent check
   if (order.payment_status === "paid") {
     return NextResponse.redirect(
       `${baseUrl}/dashboard/projects?payment=success&tran_id=${encodeURIComponent(
@@ -102,13 +113,13 @@ async function handleCallback(
     );
   }
 
-  // 3. Load server-authoritative amount & currency
+  // 4. Load server-authoritative amount & currency
   const expectedAmount = Number(
     order.currency === "BDT" ? order.amount_bdt || order.amount : order.amount_usd || order.amount
   );
   const expectedCurrency = order.currency;
 
-  // 4. Validate cryptographic test token and binding
+  // 5. Validate cryptographic test token and binding
   const validation = await devTestPayment.validatePayment({
     gateway: "dev_test_adapter",
     transactionRef,
@@ -118,7 +129,7 @@ async function handleCallback(
   });
 
   if (validation.verified && validation.status === "paid") {
-    // Execute trusted settlement RPC (Migration 10)
+    // Execute trusted settlement RPC (Migration 10) under service_role
     const { data: rpcRes, error: rpcErr } = await (supabase as any).rpc(
       "settle_verified_payment",
       {
@@ -133,97 +144,12 @@ async function handleCallback(
     );
 
     if (rpcErr || (rpcRes && !(rpcRes as Record<string, unknown>).ok)) {
-      // Fallback to direct write
-      await supabase
-        .from("orders")
-        .update({
-          payment_status: "paid",
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", order.id);
-
-      await supabase.from("payments").insert({
-        order_id: order.id,
-        gateway: "dev_test_adapter",
-        transaction_ref: transactionRef,
-        amount: validation.amountVerified,
-        currency: validation.currencyVerified,
-        channel: "Dev Test Simulated",
-        verified: true,
-        verified_at: new Date().toISOString(),
-        payload: validation.rawPayload as unknown as Json,
-      });
-
-      const { data: existingProject } = await supabase
-        .from("projects")
-        .select("id")
-        .eq("order_id", order.id)
-        .single();
-
-      if (!existingProject) {
-        const scope = (order.scope_snapshot || {}) as {
-          objective?: { goal?: string };
-        };
-        const projectTitle = `${order.order_ref} — ${
-          scope.objective?.goal || "Creative Production Scope"
-        }`;
-
-        const { data: newProject } = await supabase
-          .from("projects")
-          .insert({
-            order_id: order.id,
-            client_id: order.client_id,
-            title: projectTitle,
-            status: "awaiting_brief",
-            revisions_used: 0,
-            max_revisions: 3,
-          })
-          .select()
-          .single();
-
-        if (newProject) {
-          await supabase.from("project_briefs").insert({
-            project_id: newProject.id,
-            brand_name: "",
-            objective: scope.objective?.goal || "",
-            audience: "",
-            platforms: "",
-            submitted: false,
-          });
-
-          const defaultTasks = [
-            {
-              title: "Client Creative Brief Submission",
-              status: "todo" as const,
-              display_order: 1,
-            },
-            {
-              title: "Production Kickoff & Creative Direction",
-              status: "todo" as const,
-              display_order: 2,
-            },
-            {
-              title: "Draft Deliverable Delivery & Review",
-              status: "todo" as const,
-              display_order: 3,
-            },
-            {
-              title: "Final Asset Handover & Archiving",
-              status: "todo" as const,
-              display_order: 4,
-            },
-          ];
-
-          for (const t of defaultTasks) {
-            await supabase.from("project_tasks").insert({
-              project_id: newProject.id,
-              title: t.title,
-              status: t.status,
-              display_order: t.display_order,
-            });
-          }
-        }
-      }
+      console.error("Dev-test settlement RPC failed:", rpcErr?.message);
+      return NextResponse.redirect(
+        `${baseUrl}/builder?payment=failed&error=${encodeURIComponent(
+          "Settlement execution failed: " + (rpcErr?.message || "Unknown error")
+        )}`
+      );
     }
 
     await supabase.from("audit_logs").insert({

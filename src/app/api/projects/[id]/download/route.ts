@@ -223,6 +223,8 @@ Freakin's Studio Creative Operations & Commercial Licensing Desk
     );
 
     // 5. Assets Folder — Fetch and bundle real verified assets
+    // CRITICAL SECURITY FIX (Directive 13.0 §12):
+    // Fail delivery completely if any approved asset fails to download from private storage.
     const assetsFolder = zip.folder("assets");
     if (assetsFolder) {
       assetsFolder.file(
@@ -242,18 +244,34 @@ Freakin's Studio Creative Operations & Commercial Licensing Desk
       );
 
       for (const asset of approvedAssets) {
-        if (asset.storage_path) {
-          try {
-            const { data: blob } = await supabase.storage
-              .from("project-assets")
-              .download(asset.storage_path);
-            if (blob) {
-              const arrayBuf = await blob.arrayBuffer();
-              assetsFolder.file(asset.file_name, Buffer.from(arrayBuf));
-            }
-          } catch (storageErr) {
-            console.warn(`Could not download storage asset ${asset.file_name}:`, storageErr);
+        if (!asset.storage_path) {
+          return new NextResponse(
+            `Deliverable Incomplete: Asset ${asset.file_name} has no associated storage path.`,
+            { status: 502 }
+          );
+        }
+
+        try {
+          const { data: blob, error: downloadErr } = await supabase.storage
+            .from("project-assets")
+            .download(asset.storage_path);
+
+          if (downloadErr || !blob) {
+            console.error(`Storage asset download failure for ${asset.file_name}:`, downloadErr);
+            return new NextResponse(
+              `Deliverable Packaging Error: Failed to retrieve approved asset ${asset.file_name} from private storage. Delivery halted to guarantee archival integrity.`,
+              { status: 502 }
+            );
           }
+
+          const arrayBuf = await blob.arrayBuffer();
+          assetsFolder.file(asset.file_name, Buffer.from(arrayBuf));
+        } catch (storageErr) {
+          console.error(`Exception downloading asset ${asset.file_name}:`, storageErr);
+          return new NextResponse(
+            `Deliverable Packaging Error: Internal exception downloading ${asset.file_name}. Delivery halted.`,
+            { status: 502 }
+          );
         }
       }
     }

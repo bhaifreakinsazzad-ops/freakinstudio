@@ -1,18 +1,23 @@
--- Freakin's Studio — Migration 10/10 (Directive 11.0 Database Transaction Layer)
+-- Freakin's Studio — Migration 10/10 (Directive 13.0 Security Remediation)
 --
 -- TRUSTED DATABASE TRANSACTION LAYER & INTEGRITY PROCEDURES
 --
--- This migration implements:
---   1. create_quotation_request(...)
---   2. create_pending_order(...)
---   3. settle_verified_payment(...)
---   4. submit_project_brief(...)
---   5. approve_project_asset(...)
---   6. request_project_revision(...)
---
--- All functions run as SECURITY DEFINER with search_path = public.
--- Commercial state transitions (payments, orders, projects) are guaranteed atomic.
--- Anti-replay and idempotent settlement constraints are enforced.
+-- REMEDIATED SECURITY SAFEGUARDS (Directive 13.0 §2, §3):
+--   1. settle_verified_payment:
+--      * REVOKED execution from anon and authenticated.
+--      * EXECUTABLE ONLY by service_role (trusted server-side execution after provider verification).
+--      * ENFORCES that caller amount and currency match the order record exactly.
+--      * ENFORCES atomic settlement, row-locking (FOR UPDATE), and idempotent project creation.
+--   2. create_pending_order:
+--      * If based on an issued quote, DERIVES total directly from quotes table (ignoring caller parameters).
+--      * Validates that quote is issued, accepted, and belongs to caller.
+--      * If direct checkout, derives prices against approved services and add-ons.
+--      * Rejects zero, negative, or unapproved quantities.
+--   3. create_quotation_request:
+--      * Validates caller identity.
+--      * Calculates line totals from approved catalog prices (services.base_bdt / base_usd).
+--   4. submit_project_brief & approve_project_asset:
+--      * Strictly validates ownership and state transitions.
 
 -- ---------------------------------------------------------------------------
 -- 1. create_quotation_request
@@ -20,8 +25,6 @@
 create or replace function public.create_quotation_request(
   p_client_id uuid,
   p_currency text,
-  p_amount_bdt numeric,
-  p_amount_usd numeric,
   p_scope jsonb,
   p_items jsonb,
   p_notes text default null
@@ -35,8 +38,14 @@ declare
   v_quote_id uuid;
   v_quote_ref text;
   v_item jsonb;
+  v_service record;
+  v_qty int;
+  v_rate_bdt numeric := 0;
+  v_rate_usd numeric := 0;
+  v_total_bdt numeric := 0;
+  v_total_usd numeric := 0;
 begin
-  -- Validate caller
+  -- Validate caller authentication
   if auth.uid() is null or (auth.uid() <> p_client_id and not public.is_admin()) then
     raise exception 'Unauthorized quotation request';
   end if;
@@ -47,6 +56,7 @@ begin
 
   v_quote_ref := 'FS-QT-' || to_char(now(), 'YYYY') || '-' || upper(substr(md5(random()::text || clock_timestamp()::text), 1, 6));
 
+  -- Insert base quotation in pending state
   insert into public.quotes (
     quote_ref,
     client_id,
@@ -63,20 +73,42 @@ begin
     v_quote_ref,
     p_client_id,
     p_currency,
-    coalesce(p_amount_bdt, 0),
-    coalesce(p_amount_usd, 0),
+    0,
+    0,
     'pending',
-    'priced',
+    'manual',
     coalesce(p_scope, '{}'::jsonb),
     p_notes,
     now(),
     now()
   ) returning id into v_quote_id;
 
-  -- Insert items if provided
+  -- Process and validate each item from approved catalog
   if p_items is not null and jsonb_array_length(p_items) > 0 then
     for v_item in select * from jsonb_array_elements(p_items)
     loop
+      v_qty := coalesce((v_item->>'quantity')::int, 1);
+      if v_qty <= 0 or v_qty > 1000 then
+        raise exception 'Invalid item quantity %', v_qty;
+      end if;
+
+      -- Look up official service rates from database
+      select * into v_service
+      from public.services
+      where id = (v_item->>'service_id');
+
+      if found then
+        v_rate_bdt := coalesce(v_service.base_bdt, 0);
+        v_rate_usd := coalesce(v_service.base_usd, 0);
+      else
+        -- Fall back to 0 for custom/unapproved items (manual quotation mode)
+        v_rate_bdt := 0;
+        v_rate_usd := 0;
+      end if;
+
+      v_total_bdt := v_total_bdt + (v_rate_bdt * v_qty);
+      v_total_usd := v_total_usd + (v_rate_usd * v_qty);
+
       insert into public.quote_items (
         quote_id,
         service_id,
@@ -90,18 +122,24 @@ begin
       ) values (
         v_quote_id,
         v_item->>'service_id',
-        coalesce(v_item->>'title', 'Service Item'),
-        coalesce((v_item->>'quantity')::int, 1),
-        coalesce((v_item->>'unit_rate_bdt')::numeric, 0),
-        coalesce((v_item->>'unit_rate_usd')::numeric, 0),
-        coalesce((v_item->>'line_total_bdt')::numeric, 0),
-        coalesce((v_item->>'line_total_usd')::numeric, 0),
+        coalesce(v_item->>'title', coalesce(v_service.title, 'Service Item')),
+        v_qty,
+        v_rate_bdt,
+        v_rate_usd,
+        (v_rate_bdt * v_qty),
+        (v_rate_usd * v_qty),
         coalesce(v_item->'config', '{}'::jsonb)
       );
     end loop;
   end if;
 
-  -- Insert audit log
+  -- Update quotation with server-calculated amounts
+  update public.quotes
+  set
+    amount_bdt = v_total_bdt,
+    amount_usd = v_total_usd
+  where id = v_quote_id;
+
   insert into public.audit_logs (
     event_type,
     details,
@@ -122,20 +160,18 @@ begin
 end;
 $$;
 
--- Grant execution to authenticated users
+-- Grant execution only to authenticated callers & service_role (NOT anon)
+revoke all on function public.create_quotation_request from public, anon;
 grant execute on function public.create_quotation_request to authenticated, service_role;
 
 -- ---------------------------------------------------------------------------
--- 2. create_pending_order
+-- 2. create_pending_order (Server-Authoritative Pricing)
 -- ---------------------------------------------------------------------------
 create or replace function public.create_pending_order(
   p_client_id uuid,
   p_quote_id uuid,
   p_order_ref text,
   p_currency text,
-  p_amount numeric,
-  p_amount_bdt numeric,
-  p_amount_usd numeric,
   p_scope jsonb,
   p_items jsonb,
   p_is_test boolean default false
@@ -147,7 +183,15 @@ set search_path = public
 as $$
 declare
   v_order_id uuid;
+  v_quote record;
   v_item jsonb;
+  v_service record;
+  v_qty int;
+  v_rate_bdt numeric := 0;
+  v_rate_usd numeric := 0;
+  v_final_bdt numeric := 0;
+  v_final_usd numeric := 0;
+  v_payable_amount numeric := 0;
 begin
   -- Validate caller
   if auth.uid() is null or (auth.uid() <> p_client_id and not public.is_admin()) then
@@ -158,8 +202,67 @@ begin
     raise exception 'Invalid currency %', p_currency;
   end if;
 
-  if p_amount <= 0 then
-    raise exception 'Order amount must be positive';
+  -- CASE A: Order is based on an issued quotation
+  if p_quote_id is not null then
+    select * into v_quote
+    from public.quotes
+    where id = p_quote_id and client_id = p_client_id;
+
+    if not found then
+      raise exception 'Quotation not found or not owned by client';
+    end if;
+
+    if v_quote.status not in ('issued', 'accepted') then
+      raise exception 'Quotation is not in an orderable status (%)', v_quote.status;
+    end if;
+
+    if v_quote.expires_at is not null and v_quote.expires_at < now() then
+      raise exception 'Quotation has expired';
+    end if;
+
+    -- Authoritative values derived strictly from accepted quotation
+    v_final_bdt := v_quote.amount_bdt;
+    v_final_usd := v_quote.amount_usd;
+    v_payable_amount := case when p_currency = 'BDT' then v_final_bdt else v_final_usd end;
+
+    -- Mark quote accepted if not already
+    update public.quotes
+    set status = 'accepted', accepted_at = coalesce(accepted_at, now())
+    where id = p_quote_id;
+
+  -- CASE B: Direct checkout (recalculate from catalog)
+  else
+    if p_items is null or jsonb_array_length(p_items) = 0 then
+      raise exception 'Direct checkout order requires at least one service item';
+    end if;
+
+    for v_item in select * from jsonb_array_elements(p_items)
+    loop
+      v_qty := coalesce((v_item->>'quantity')::int, 1);
+      if v_qty <= 0 or v_qty > 100 then
+        raise exception 'Quantity out of permitted direct checkout range: %', v_qty;
+      end if;
+
+      select * into v_service
+      from public.services
+      where id = (v_item->>'service_id');
+
+      if not found then
+        raise exception 'Service not found: %', (v_item->>'service_id');
+      end if;
+
+      v_rate_bdt := coalesce(v_service.base_bdt, 0);
+      v_rate_usd := coalesce(v_service.base_usd, 0);
+
+      v_final_bdt := v_final_bdt + (v_rate_bdt * v_qty);
+      v_final_usd := v_final_usd + (v_rate_usd * v_qty);
+    end loop;
+
+    v_payable_amount := case when p_currency = 'BDT' then v_final_bdt else v_final_usd end;
+  end if;
+
+  if v_payable_amount <= 0 then
+    raise exception 'Order payable amount must be positive';
   end if;
 
   -- Insert order in strictly 'awaiting_payment' status
@@ -181,9 +284,9 @@ begin
     p_client_id,
     p_quote_id,
     p_currency,
-    p_amount,
-    coalesce(p_amount_bdt, 0),
-    coalesce(p_amount_usd, 0),
+    v_payable_amount,
+    v_final_bdt,
+    v_final_usd,
     'awaiting_payment',
     p_is_test,
     coalesce(p_scope, '{}'::jsonb),
@@ -195,6 +298,9 @@ begin
   if p_items is not null and jsonb_array_length(p_items) > 0 then
     for v_item in select * from jsonb_array_elements(p_items)
     loop
+      v_qty := coalesce((v_item->>'quantity')::int, 1);
+      select * into v_service from public.services where id = (v_item->>'service_id');
+
       insert into public.order_items (
         order_id,
         service_id,
@@ -208,12 +314,12 @@ begin
       ) values (
         v_order_id,
         v_item->>'service_id',
-        coalesce(v_item->>'title', 'Service Item'),
-        coalesce((v_item->>'quantity')::int, 1),
-        coalesce((v_item->>'unit_rate_bdt')::numeric, 0),
-        coalesce((v_item->>'unit_rate_usd')::numeric, 0),
-        coalesce((v_item->>'line_total_bdt')::numeric, 0),
-        coalesce((v_item->>'line_total_usd')::numeric, 0),
+        coalesce(v_item->>'title', coalesce(v_service.title, 'Service Item')),
+        v_qty,
+        coalesce(v_service.base_bdt, 0),
+        coalesce(v_service.base_usd, 0),
+        coalesce(v_service.base_bdt, 0) * v_qty,
+        coalesce(v_service.base_usd, 0) * v_qty,
         coalesce(v_item->'config', '{}'::jsonb)
       );
     end loop;
@@ -228,22 +334,27 @@ begin
     'ORDER_CREATED',
     'Pending order ' || p_order_ref || ' created awaiting payment settlement',
     p_client_id,
-    jsonb_build_object('order_id', v_order_id, 'order_ref', p_order_ref, 'amount', p_amount, 'currency', p_currency)
+    jsonb_build_object('order_id', v_order_id, 'order_ref', p_order_ref, 'amount', v_payable_amount, 'currency', p_currency)
   );
 
   return jsonb_build_object(
     'ok', true,
     'order_id', v_order_id,
-    'order_ref', p_order_ref
+    'order_ref', p_order_ref,
+    'amount', v_payable_amount,
+    'currency', p_currency
   );
 end;
 $$;
 
+revoke all on function public.create_pending_order from public, anon;
 grant execute on function public.create_pending_order to authenticated, service_role;
 
 -- ---------------------------------------------------------------------------
--- 3. settle_verified_payment
+-- 3. settle_verified_payment (CRITICAL SECURITY HARDENED)
 -- ---------------------------------------------------------------------------
+-- Must only be executed by service_role following genuine provider validation.
+-- Checks that amount and currency match order records strictly.
 create or replace function public.settle_verified_payment(
   p_order_ref text,
   p_gateway text,
@@ -265,6 +376,7 @@ declare
   v_existing_verified boolean;
   v_scope jsonb;
   v_project_title text;
+  v_expected_amount numeric;
 begin
   -- Lookup target order with row lock to prevent race conditions
   select * into v_order
@@ -293,9 +405,15 @@ begin
     return jsonb_build_object('ok', false, 'error', 'Invalid payment gateway');
   end if;
 
-  -- Validate currency match
+  -- Validate currency match against order record
   if v_order.currency <> p_currency then
     return jsonb_build_object('ok', false, 'error', 'Payment currency mismatch');
+  end if;
+
+  -- Validate amount match against order record
+  v_expected_amount := v_order.amount;
+  if abs(v_expected_amount - p_amount) > 0.01 then
+    return jsonb_build_object('ok', false, 'error', 'Payment amount mismatch against immutable order record');
   end if;
 
   -- Check if verified payment already recorded
@@ -426,7 +544,10 @@ begin
 end;
 $$;
 
-grant execute on function public.settle_verified_payment to authenticated, service_role, anon;
+-- CRITICAL FIX (Directive 13.0 §2): Revoke execution from PUBLIC, anon, and authenticated.
+-- Restrict settlement exclusively to service_role.
+revoke all on function public.settle_verified_payment from public, anon, authenticated;
+grant execute on function public.settle_verified_payment to service_role;
 
 -- ---------------------------------------------------------------------------
 -- 4. submit_project_brief
@@ -497,6 +618,7 @@ begin
 end;
 $$;
 
+revoke all on function public.submit_project_brief from public, anon;
 grant execute on function public.submit_project_brief to authenticated, service_role;
 
 -- ---------------------------------------------------------------------------
@@ -587,4 +709,5 @@ begin
 end;
 $$;
 
+revoke all on function public.approve_project_asset from public, anon;
 grant execute on function public.approve_project_asset to authenticated, service_role;
