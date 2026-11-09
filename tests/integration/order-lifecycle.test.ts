@@ -157,6 +157,10 @@ describe("Directive 9.0 Section 11 — Complete Multi-User Lifecycle Integration
     expect(sessionInitiation.success).toBe(true);
     expect(sessionInitiation.transactionRef).toBeDefined();
 
+    // Extract cryptographically bound dynamic token from session
+    const callbackUrl = new URL(sessionInitiation.redirectUrl || "", "https://freakinstudio.com");
+    const devToken = callbackUrl.searchParams.get("dev_token") || "";
+
     // Verify payment transaction via DevTest adapter with server-authoritative token
     const paymentValidation = await devTestPayment.validatePayment({
       gateway: "dev_test_adapter",
@@ -164,7 +168,8 @@ describe("Directive 9.0 Section 11 — Complete Multi-User Lifecycle Integration
       expectedAmount: pricingSummary.finalBDT,
       expectedCurrency: "BDT",
       gatewayPayload: {
-        dev_token: "dev_secret_auth",
+        dev_token: devToken,
+        order_ref: orderRef,
         amount: pricingSummary.finalBDT,
         currency: "BDT",
       },

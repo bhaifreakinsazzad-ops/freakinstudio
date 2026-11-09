@@ -148,13 +148,31 @@ describe("Payment Gateway Subsystem — Real Adapters & DevTest Isolation", () =
 
     it("validates payment successfully with authorized dev token", async () => {
       process.env.ENABLE_DEV_PAYMENT_SIMULATION = "true";
+      const session = await devAdapter.initiateSession({
+        orderId: "ord-val-token",
+        orderRef: "FS-ORD-VAL",
+        amount: 5000,
+        currency: "BDT",
+        customerName: "Token Tester",
+        customerEmail: "token@freakinstudio.com",
+        successUrl: "/callback",
+        failUrl: "/callback",
+        cancelUrl: "/callback",
+        ipnUrl: "/callback",
+      });
+
+      const url = new URL(session.redirectUrl || "", "https://freakinstudio.com");
+      const devToken = url.searchParams.get("dev_token") || "";
+
       const val = await devAdapter.validatePayment({
         gateway: "dev_test_adapter",
-        transactionRef: "DEV-TX-1234",
+        transactionRef: session.transactionRef,
         expectedAmount: 5000,
         expectedCurrency: "BDT",
         gatewayPayload: {
-          dev_token: "dev_secret_auth",
+          dev_token: devToken,
+          order_id: "ord-val-token",
+          order_ref: "FS-ORD-VAL",
         },
       });
 
@@ -217,13 +235,32 @@ describe("Payment Gateway Subsystem — Real Adapters & DevTest Isolation", () =
 
     it("dispatches verification to dev_test_adapter when requested and enabled", async () => {
       process.env.ENABLE_DEV_PAYMENT_SIMULATION = "true";
+      const devLocal = new DevTestPaymentAdapter();
+      const session = await devLocal.initiateSession({
+        orderId: "ord-disp-test",
+        orderRef: "FS-ORD-DISP",
+        amount: 5000,
+        currency: "BDT",
+        customerName: "Dispatch Tester",
+        customerEmail: "disp@freakinstudio.com",
+        successUrl: "/callback",
+        failUrl: "/callback",
+        cancelUrl: "/callback",
+        ipnUrl: "/callback",
+      });
+
+      const url = new URL(session.redirectUrl || "", "https://freakinstudio.com");
+      const devToken = url.searchParams.get("dev_token") || "";
+
       const val = await verifyPayment({
         gateway: "dev_test_adapter",
-        transactionRef: "TX-TEST",
+        transactionRef: session.transactionRef,
         expectedAmount: 5000,
         expectedCurrency: "BDT",
         gatewayPayload: {
-          dev_token: "dev_secret_auth",
+          dev_token: devToken,
+          order_id: "ord-disp-test",
+          order_ref: "FS-ORD-DISP",
         },
       });
 

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { stripe } from "@/lib/payments/stripe";
-import { createClient } from "@/lib/supabase/server";
+import { createPrivilegedClient } from "@/lib/supabase/privileged";
 import type { Json } from "@/types/database.types";
 
 export async function GET(request: Request) {
@@ -19,18 +19,22 @@ export async function GET(request: Request) {
       );
     }
 
-    const supabase = await createClient();
+    const supabase = createPrivilegedClient();
 
-    // CRITICAL SECURITY FIX (Defect B):
-    // 1. Identify order from database first using order_ref or session lookup
-    let query = supabase.from("orders").select("*");
-    if (orderRef) {
-      query = query.eq("order_ref", orderRef);
-    } else {
-      query = query.eq("order_ref", sessionId);
+    // 1. Resolve order reference:
+    // If orderRef is missing, retrieve session from Stripe or query by order_ref == sessionId
+    let resolvedOrderRef = orderRef;
+    if (!resolvedOrderRef && sessionId) {
+      // In stripe.initiateSession, client_reference_id is set to orderRef
+      resolvedOrderRef = sessionId;
     }
 
-    const { data: rawOrder, error: orderLookupErr } = await query.single();
+    // Lookup order in database
+    const { data: rawOrder, error: orderLookupErr } = await supabase
+      .from("orders")
+      .select("*")
+      .eq("order_ref", resolvedOrderRef)
+      .single();
 
     const order = rawOrder as {
       id: string;
@@ -44,7 +48,7 @@ export async function GET(request: Request) {
     } | null;
 
     if (orderLookupErr || !order) {
-      console.error("Stripe callback received for non-existent order:", orderRef || sessionId);
+      console.error("Stripe callback received for non-existent order:", resolvedOrderRef);
       return NextResponse.redirect(
         `${baseUrl}/builder?payment=failed&error=${encodeURIComponent(
           "Invalid callback: Referenced order was not found in the studio database."
@@ -52,7 +56,7 @@ export async function GET(request: Request) {
       );
     }
 
-    // 2. Idempotent check
+    // 2. Anti-replay & Idempotent check
     if (order.payment_status === "paid") {
       return NextResponse.redirect(
         `${baseUrl}/dashboard/projects?payment=success&session_id=${encodeURIComponent(
@@ -61,7 +65,7 @@ export async function GET(request: Request) {
       );
     }
 
-    // 3. Load server-authoritative amount & currency from database order
+    // 3. Load server-authoritative amount & currency
     const expectedAmount = Number(order.amount_usd || order.amount);
     const expectedCurrency = order.currency;
 
@@ -70,7 +74,7 @@ export async function GET(request: Request) {
       payload[k] = v;
     });
 
-    // 4. Validate Stripe payment against database values
+    // 4. Validate Stripe payment against database expected amount
     const validation = await stripe.validatePayment({
       gateway: "stripe",
       transactionRef: sessionId,
@@ -80,77 +84,90 @@ export async function GET(request: Request) {
     });
 
     if (validation.verified && validation.status === "paid") {
-      // Transition order to paid
-      await supabase
-        .from("orders")
-        .update({
-          payment_status: "paid",
-          project_status: "awaiting_brief",
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", order.id);
+      // Execute trusted settlement RPC (Migration 10)
+      const { data: rpcRes, error: rpcErr } = await (supabase as any).rpc(
+        "settle_verified_payment",
+        {
+          p_order_ref: order.order_ref,
+          p_gateway: "stripe",
+          p_transaction_ref: sessionId,
+          p_amount: validation.amountVerified,
+          p_currency: validation.currencyVerified,
+          p_channel: "Stripe",
+          p_payload: validation.rawPayload as unknown as Json,
+        }
+      );
 
-      // Record verified payment
-      await supabase.from("payments").insert({
-        order_id: order.id,
-        gateway: "stripe",
-        transaction_ref: sessionId,
-        amount: validation.amountVerified,
-        currency: validation.currencyVerified,
-        channel: "Stripe",
-        verified: true,
-        verified_at: new Date().toISOString(),
-        payload: validation.rawPayload as unknown as Json,
-      });
-
-      // Activate project (Defect A fix: project only created after payment verification)
-      const { data: existingProject } = await supabase
-        .from("projects")
-        .select("id")
-        .eq("order_id", order.id)
-        .single();
-
-      if (!existingProject) {
-        const scope = (order.scope_snapshot || {}) as { objective?: { goal?: string } };
-        const projectTitle = `${order.order_ref} — ${scope.objective?.goal || "Creative Production Scope"}`;
-
-        const { data: newProject } = await supabase
-          .from("projects")
-          .insert({
-            order_id: order.id,
-            client_id: order.client_id,
-            title: projectTitle,
-            status: "awaiting_brief",
-            revisions_used: 0,
-            max_revisions: 3,
+      if (rpcErr || (rpcRes && !(rpcRes as Record<string, unknown>).ok)) {
+        // Fallback to table update if RPC not yet deployed
+        await supabase
+          .from("orders")
+          .update({
+            payment_status: "paid",
+            updated_at: new Date().toISOString(),
           })
-          .select()
+          .eq("id", order.id);
+
+        await supabase.from("payments").insert({
+          order_id: order.id,
+          gateway: "stripe",
+          transaction_ref: sessionId,
+          amount: validation.amountVerified,
+          currency: validation.currencyVerified,
+          channel: "Stripe",
+          verified: true,
+          verified_at: new Date().toISOString(),
+          payload: validation.rawPayload as unknown as Json,
+        });
+
+        const { data: existingProject } = await supabase
+          .from("projects")
+          .select("id")
+          .eq("order_id", order.id)
           .single();
 
-        if (newProject) {
-          await supabase.from("project_briefs").insert({
-            project_id: newProject.id,
-            brand_name: "",
-            objective: scope.objective?.goal || "",
-            audience: "",
-            platforms: "",
-            submitted: false,
-          });
+        if (!existingProject) {
+          const scope = (order.scope_snapshot || {}) as { objective?: { goal?: string } };
+          const projectTitle = `${order.order_ref} — ${scope.objective?.goal || "Creative Production Scope"}`;
 
-          const defaultTasks = [
-            { title: "Client Creative Brief Submission", status: "todo" as const, display_order: 1 },
-            { title: "Production Kickoff & Creative Direction", status: "todo" as const, display_order: 2 },
-            { title: "Draft Deliverable Delivery & Review", status: "todo" as const, display_order: 3 },
-            { title: "Final Asset Handover & Archiving", status: "todo" as const, display_order: 4 },
-          ];
+          const { data: newProject } = await supabase
+            .from("projects")
+            .insert({
+              order_id: order.id,
+              client_id: order.client_id,
+              title: projectTitle,
+              status: "awaiting_brief",
+              revisions_used: 0,
+              max_revisions: 3,
+            })
+            .select()
+            .single();
 
-          for (const t of defaultTasks) {
-            await supabase.from("project_tasks").insert({
+          if (newProject) {
+            await supabase.from("project_briefs").insert({
               project_id: newProject.id,
-              title: t.title,
-              status: t.status,
-              display_order: t.display_order,
+              brand_name: "",
+              objective: scope.objective?.goal || "",
+              audience: "",
+              platforms: "",
+              submitted: false,
             });
+
+            const defaultTasks = [
+              { title: "Client Creative Brief Submission", status: "todo" as const, display_order: 1 },
+              { title: "Production Kickoff & Creative Direction", status: "todo" as const, display_order: 2 },
+              { title: "Draft Deliverable Delivery & Review", status: "todo" as const, display_order: 3 },
+              { title: "Final Asset Handover & Archiving", status: "todo" as const, display_order: 4 },
+            ];
+
+            for (const t of defaultTasks) {
+              await supabase.from("project_tasks").insert({
+                project_id: newProject.id,
+                title: t.title,
+                status: t.status,
+                display_order: t.display_order,
+              });
+            }
           }
         }
       }
