@@ -19,12 +19,12 @@ export default function MarketingHomePage() {
             creative-commerce experience.
           </p>
           <div className="flex gap-3">
-            <Button asChild size="lg" className="cyber-glow">
-              <Link href="/signup">Create an account</Link>
-            </Button>
-            <Button asChild size="lg" variant="outline">
-              <Link href="/login">Sign in</Link>
-            </Button>
+            <Button
+              render={<Link href="/signup">Create an account</Link>}
+              size="lg"
+              className="cyber-glow"
+            />
+            <Button render={<Link href="/login">Sign in</Link>} size="lg" variant="outline" />
           </div>
         </section>
       </main>

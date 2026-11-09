@@ -9,12 +9,8 @@ export function Navbar() {
           FREAKIN&apos;S STUDIO
         </Link>
         <nav className="flex items-center gap-2">
-          <Button asChild variant="ghost" size="sm">
-            <Link href="/login">Sign in</Link>
-          </Button>
-          <Button asChild size="sm" className="cyber-glow">
-            <Link href="/signup">Sign up</Link>
-          </Button>
+          <Button render={<Link href="/login">Sign in</Link>} variant="ghost" size="sm" />
+          <Button render={<Link href="/signup">Sign up</Link>} size="sm" className="cyber-glow" />
         </nav>
       </div>
     </header>
