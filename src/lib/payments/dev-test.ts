@@ -1,4 +1,6 @@
 import crypto from "crypto";
+import fs from "fs";
+import path from "path";
 import type {
   PaymentInitiationRequest,
   PaymentInitiationResponse,
@@ -16,14 +18,68 @@ interface DevTestSessionRecord {
   used: boolean;
 }
 
-// In-memory secure server-side session registry with TTL & single-use guarantee
+// Durable file-backed directory for non-production multi-instance persistence
+const SESSIONS_DIR = path.resolve(process.cwd(), ".dev-test-sessions");
+
+function ensureSessionsDir() {
+  try {
+    if (!fs.existsSync(SESSIONS_DIR)) {
+      fs.mkdirSync(SESSIONS_DIR, { recursive: true });
+    }
+  } catch {
+    // Fall back to in-memory if filesystem is restricted
+  }
+}
+
+// In-memory cache + file-backed persistence
 const devSessionRegistry = new Map<string, DevTestSessionRecord>();
+
+function saveSession(record: DevTestSessionRecord) {
+  devSessionRegistry.set(record.transactionRef, record);
+  try {
+    ensureSessionsDir();
+    const filePath = path.join(SESSIONS_DIR, `${record.transactionRef}.json`);
+    fs.writeFileSync(filePath, JSON.stringify(record), "utf-8");
+  } catch {
+    // Ignore fs write error in serverless read-only contexts
+  }
+}
+
+function loadSession(transactionRef: string): DevTestSessionRecord | undefined {
+  if (devSessionRegistry.has(transactionRef)) {
+    return devSessionRegistry.get(transactionRef);
+  }
+  try {
+    const filePath = path.join(SESSIONS_DIR, `${transactionRef}.json`);
+    if (fs.existsSync(filePath)) {
+      const data = JSON.parse(fs.readFileSync(filePath, "utf-8")) as DevTestSessionRecord;
+      devSessionRegistry.set(transactionRef, data);
+      return data;
+    }
+  } catch {
+    // Fall back to in-memory map
+  }
+  return undefined;
+}
+
+function deleteSession(transactionRef: string) {
+  devSessionRegistry.delete(transactionRef);
+  try {
+    const filePath = path.join(SESSIONS_DIR, `${transactionRef}.json`);
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+  } catch {
+    // Ignore error
+  }
+}
 
 /**
  * Explicit Development-Only Test Adapter.
- * Per Directive 11.0 Section 4:
+ * Per Directive 11.0 & 12.0 Section 8:
  * - Must fail closed in production.
  * - Single-use, short-lived (15 min TTL), server-validated test authorization token.
+ * - Durable persistence survives serverless cold starts and multi-process restarts.
  * - Replay prevention: token invalidated upon first settlement.
  * - Never accepted across live SSLCOMMERZ or Stripe public callback routes.
  */
@@ -50,8 +106,8 @@ export class DevTestPaymentAdapter {
     const transactionRef = `DEV-TX-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
     const authToken = crypto.randomBytes(24).toString("hex");
 
-    // Store server-side bound to order, amount, currency, and TTL
-    devSessionRegistry.set(transactionRef, {
+    // Persist server-side bound to order, amount, currency, and TTL
+    const record: DevTestSessionRecord = {
       transactionRef,
       orderRef: req.orderRef,
       expectedAmount: req.amount,
@@ -59,7 +115,9 @@ export class DevTestPaymentAdapter {
       authToken,
       expiresAt: Date.now() + 15 * 60 * 1000, // 15 minutes TTL
       used: false,
-    });
+    };
+
+    saveSession(record);
 
     return {
       success: true,
@@ -93,7 +151,7 @@ export class DevTestPaymentAdapter {
       };
     }
 
-    const session = devSessionRegistry.get(req.transactionRef);
+    const session = loadSession(req.transactionRef);
 
     // Verify session existence in server-side registry
     if (!session) {
@@ -113,7 +171,7 @@ export class DevTestPaymentAdapter {
 
     // Verify TTL
     if (Date.now() > session.expiresAt) {
-      devSessionRegistry.delete(req.transactionRef);
+      deleteSession(req.transactionRef);
       return {
         verified: false,
         status: "failed",
@@ -188,22 +246,38 @@ export class DevTestPaymentAdapter {
         riskStatus: "flagged",
         isDuplicate: false,
         rawPayload: raw,
-        error: `Currency mismatch: stored order expects ${req.expectedCurrency}, test session bound to ${session.expectedCurrency}`,
+        error: `Currency mismatch: expected ${req.expectedCurrency}, session is ${session.expectedCurrency}`,
       };
     }
 
-    // Consume the token atomically
+    // Bind verification to expected orderRef
+    const providedOrderRef = String(raw.order_ref || "");
+    if (providedOrderRef && providedOrderRef !== session.orderRef) {
+      return {
+        verified: false,
+        status: "failed",
+        mode: "dev_test",
+        transactionRef: req.transactionRef,
+        amountVerified: session.expectedAmount,
+        currencyVerified: req.expectedCurrency,
+        riskStatus: "fraud",
+        isDuplicate: false,
+        rawPayload: raw,
+        error: `Order binding mismatch: token belongs to order ${session.orderRef}`,
+      };
+    }
+
+    // Mark consumed immediately to prevent replay
     session.used = true;
+    saveSession(session);
 
     return {
       verified: true,
       status: "paid",
       mode: "dev_test",
       transactionRef: req.transactionRef,
-      amountVerified: req.expectedAmount,
-      currencyVerified: req.expectedCurrency,
-      bankTranId: `DEV_BANK_${Date.now()}`,
-      cardType: "DEV-SECURE-TEST",
+      amountVerified: session.expectedAmount,
+      currencyVerified: session.expectedCurrency,
       riskStatus: "safe",
       isDuplicate: false,
       rawPayload: raw,

@@ -11,7 +11,8 @@
     "test:unit": "vitest run tests/unit",
     "test:integration": "vitest run tests/integration",
     "extract:catalog": "tsx scripts/extract-legacy-catalog.ts",
-    "seed:catalog": "tsx scripts/seed-services.ts"
+    "seed:catalog": "tsx scripts/seed-services.ts",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
@@ -30,6 +31,7 @@
     "zod": "4.6.7"
   },
   "devDependencies": {
+    "@playwright/test": "^1.65.0",
     "@tailwindcss/turbopack": "^4",
     "@types/jszip": "^3.4.0",
     "@types/node": "^22.20.5",
