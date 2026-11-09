@@ -4,7 +4,7 @@ import {
   getAllServiceAddOnsMap,
 } from "@/lib/catalog";
 import { calculatePricingSummary } from "@/lib/pricing/engine";
-import { sslcommerz } from "@/lib/payments/sslcommerz";
+import { devTestPayment } from "@/lib/payments/dev-test";
 import JSZip from "jszip";
 import type {
   PackageDraft,
@@ -137,36 +137,36 @@ describe("Directive 9.0 Section 11 — Complete Multi-User Lifecycle Integration
     expect(approvedQuotation.status).toBe("approved");
 
     // -------------------------------------------------------------
-    // STEP 14-16: SSLCOMMERZ Hosted Checkout Handshake
+    // STEP 14-16: Controlled Checkout Handshake via DevTest Adapter (Directive 10.0 Defect C)
     // -------------------------------------------------------------
+    process.env.ENABLE_DEV_PAYMENT_SIMULATION = "true";
     const orderRef = `FS-ORD-INTEG-${Math.floor(1000 + Math.random() * 9000)}`;
-    const sessionInitiation = await sslcommerz.initiateSession({
+    const sessionInitiation = await devTestPayment.initiateSession({
       orderId: `ord-${Date.now()}`,
       orderRef,
       amount: pricingSummary.finalBDT,
       currency: "BDT",
       customerName: customerA.fullName,
       customerEmail: customerA.email,
-      successUrl: "/api/payments/sslcommerz/callback",
-      failUrl: "/api/payments/sslcommerz/callback",
-      cancelUrl: "/api/payments/sslcommerz/callback",
-      ipnUrl: "/api/payments/sslcommerz/callback",
+      successUrl: "/api/payments/dev-test/callback",
+      failUrl: "/api/payments/dev-test/callback",
+      cancelUrl: "/api/payments/dev-test/callback",
+      ipnUrl: "/api/payments/dev-test/callback",
     });
 
     expect(sessionInitiation.success).toBe(true);
     expect(sessionInitiation.transactionRef).toBeDefined();
 
-    // Verify payment transaction via Order Validation API adapter
-    const paymentValidation = await sslcommerz.validatePayment({
-      gateway: "sslcommerz",
+    // Verify payment transaction via DevTest adapter with server-authoritative token
+    const paymentValidation = await devTestPayment.validatePayment({
+      gateway: "dev_test_adapter",
       transactionRef: sessionInitiation.transactionRef,
       expectedAmount: pricingSummary.finalBDT,
       expectedCurrency: "BDT",
       gatewayPayload: {
-        simulated: "true",
+        dev_token: "dev_secret_auth",
         amount: pricingSummary.finalBDT,
         currency: "BDT",
-        status: "VALID",
       },
     });
 

@@ -1,5 +1,6 @@
-import { sslcommerz } from "./sslcommerz";
-import { stripe } from "./stripe";
+import { sslcommerz, SSLCommerzAdapter } from "./sslcommerz";
+import { stripe, StripeAdapter } from "./stripe";
+import { devTestPayment, DevTestPaymentAdapter } from "./dev-test";
 import type {
   PaymentGateway,
   PaymentInitiationRequest,
@@ -11,12 +12,18 @@ import type {
 export * from "./types";
 export { sslcommerz, SSLCommerzAdapter } from "./sslcommerz";
 export { stripe, StripeAdapter } from "./stripe";
+export { devTestPayment, DevTestPaymentAdapter } from "./dev-test";
 
 export function resolveGateway(
   requested?: PaymentGateway,
   currency: "BDT" | "USD" = "BDT"
 ): PaymentGateway {
-  if (requested) return requested;
+  if (requested === "dev_test_adapter") {
+    if (devTestPayment.isEnabled) return "dev_test_adapter";
+  }
+  if (requested === "sslcommerz" || requested === "stripe") {
+    return requested;
+  }
   return currency === "BDT" ? "sslcommerz" : "stripe";
 }
 
@@ -34,13 +41,16 @@ export async function initiatePayment(
     return stripe.initiateSession(req);
   }
 
-  // Fallback dev sandbox
+  if (gateway === "dev_test_adapter") {
+    return devTestPayment.initiateSession(req);
+  }
+
   return {
-    success: true,
-    gateway: "dev_sandbox",
-    mode: "dev_simulation",
-    transactionRef: `DEV-${Date.now()}`,
-    redirectUrl: `${req.successUrl}?tran_id=DEV-${Date.now()}&amount=${req.amount}&currency=${req.currency}&simulated=true`,
+    success: false,
+    gateway: "sslcommerz",
+    mode: "live",
+    transactionRef: req.orderRef,
+    error: `Unsupported payment gateway: ${gateway}`,
   };
 }
 
@@ -55,16 +65,20 @@ export async function verifyPayment(
     return stripe.validatePayment(req);
   }
 
-  // Dev simulation verification
+  if (req.gateway === "dev_test_adapter") {
+    return devTestPayment.validatePayment(req);
+  }
+
   return {
-    verified: true,
-    status: "paid",
-    mode: "dev_simulation",
+    verified: false,
+    status: "failed",
+    mode: "live",
     transactionRef: req.transactionRef,
-    amountVerified: req.expectedAmount,
+    amountVerified: 0,
     currencyVerified: req.expectedCurrency,
-    riskStatus: "safe",
+    riskStatus: "fraud",
     isDuplicate: false,
     rawPayload: req.gatewayPayload,
+    error: `Unsupported payment gateway: ${req.gateway}`,
   };
 }

@@ -7,11 +7,9 @@ import type {
 
 export class StripeAdapter {
   private secretKey: string;
-  private webhookSecret: string;
 
   constructor() {
     this.secretKey = process.env.STRIPE_SECRET_KEY || "";
-    this.webhookSecret = process.env.STRIPE_WEBHOOK_SECRET || "";
   }
 
   get isConfigured(): boolean {
@@ -21,26 +19,24 @@ export class StripeAdapter {
   async initiateSession(
     req: PaymentInitiationRequest
   ): Promise<PaymentInitiationResponse> {
-    const transactionRef = `STRIPE-CS-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
+    const transactionRef = req.orderRef;
 
     if (!this.isConfigured) {
       return {
-        success: true,
+        success: false,
         gateway: "stripe",
-        mode: "dev_simulation",
+        mode: "live",
         transactionRef,
-        redirectUrl: `${req.successUrl}?session_id=${transactionRef}&amount=${req.amount}&currency=${req.currency}&status=paid&simulated=true`,
-        notice: "DEVELOPMENT_SIMULATION: STRIPE_SECRET_KEY not configured in environment.",
+        error: "Stripe secret key (STRIPE_SECRET_KEY) is not configured in environment.",
       };
     }
 
     try {
-      // In cents/poisha
       const unitAmount = Math.round(req.amount * 100);
 
       const params = new URLSearchParams();
       params.append("mode", "payment");
-      params.append("success_url", `${req.successUrl}?session_id={CHECKOUT_SESSION_ID}`);
+      params.append("success_url", `${req.successUrl}?session_id={CHECKOUT_SESSION_ID}&order_ref=${encodeURIComponent(req.orderRef)}`);
       params.append("cancel_url", req.cancelUrl);
       params.append("customer_email", req.customerEmail);
       params.append("client_reference_id", req.orderRef);
@@ -83,7 +79,8 @@ export class StripeAdapter {
         gatewaySessionKey: session.id,
       };
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Network error creating Stripe session";
+      const message =
+        err instanceof Error ? err.message : "Network error creating Stripe session";
       return {
         success: false,
         gateway: "stripe",
@@ -102,66 +99,34 @@ export class StripeAdapter {
       ? this.secretKey.startsWith("sk_test_")
         ? "sandbox"
         : "live"
-      : "dev_simulation";
+      : "live";
 
-    if (raw.simulated === "true" || !this.isConfigured) {
-      const amount = Number(raw.amount || req.expectedAmount);
-      const currency = ((raw.currency as string) || req.expectedCurrency).toUpperCase() as "BDT" | "USD";
-
-      if (currency !== req.expectedCurrency) {
-        return {
-          verified: false,
-          status: "failed",
-          mode,
-          transactionRef: req.transactionRef,
-          amountVerified: amount,
-          currencyVerified: currency,
-          riskStatus: "flagged",
-          isDuplicate: false,
-          rawPayload: raw,
-          error: `Currency mismatch: expected ${req.expectedCurrency}, received ${currency}`,
-        };
-      }
-
-      if (Math.abs(amount - req.expectedAmount) > 0.01) {
-        return {
-          verified: false,
-          status: "failed",
-          mode,
-          transactionRef: req.transactionRef,
-          amountVerified: amount,
-          currencyVerified: currency,
-          riskStatus: "flagged",
-          isDuplicate: false,
-          rawPayload: raw,
-          error: `Amount mismatch: expected ${req.expectedAmount}, received ${amount}`,
-        };
-      }
-
+    if (!this.isConfigured) {
       return {
-        verified: true,
-        status: "paid",
+        verified: false,
+        status: "failed",
         mode,
         transactionRef: req.transactionRef,
-        amountVerified: amount,
-        currencyVerified: currency,
-        bankTranId: `SIM_STRIPE_${Date.now()}`,
-        cardType: "STRIPE-SIMULATED",
-        riskStatus: "safe",
+        amountVerified: 0,
+        currencyVerified: req.expectedCurrency,
+        riskStatus: "flagged",
         isDuplicate: false,
         rawPayload: raw,
+        error: "Stripe secret key is not configured in environment.",
       };
     }
 
-    // Live Stripe session retrieval verification
     const sessionId = (raw.session_id as string) || req.transactionRef;
 
     try {
-      const res = await fetch(`https://api.stripe.com/v1/checkout/sessions/${encodeURIComponent(sessionId)}`, {
-        headers: {
-          Authorization: `Bearer ${this.secretKey}`,
-        },
-      });
+      const res = await fetch(
+        `https://api.stripe.com/v1/checkout/sessions/${encodeURIComponent(sessionId)}`,
+        {
+          headers: {
+            Authorization: `Bearer ${this.secretKey}`,
+          },
+        }
+      );
 
       const session = await res.json();
 
@@ -182,12 +147,15 @@ export class StripeAdapter {
 
       const isPaid = session.payment_status === "paid";
       const amountVerified = (session.amount_total || 0) / 100;
-      const currencyVerified = (session.currency || "usd").toUpperCase() as "BDT" | "USD";
+      const currencyVerified = (session.currency || "usd").toUpperCase() as
+        | "BDT"
+        | "USD";
 
       if (!isPaid) {
         return {
           verified: false,
-          status: session.payment_status === "unpaid" ? "awaiting_payment" : "failed",
+          status:
+            session.payment_status === "unpaid" ? "awaiting_payment" : "failed",
           mode,
           transactionRef: session.id,
           amountVerified,
@@ -199,6 +167,7 @@ export class StripeAdapter {
         };
       }
 
+      // Financial validation against server-authoritative order values
       if (Math.abs(amountVerified - req.expectedAmount) > 0.01) {
         return {
           verified: false,
@@ -210,7 +179,7 @@ export class StripeAdapter {
           riskStatus: "flagged",
           isDuplicate: false,
           rawPayload: session,
-          error: `Amount mismatch: expected ${req.expectedAmount}, received ${amountVerified}`,
+          error: `Amount mismatch: stored order expects ${req.expectedAmount}, provider verified ${amountVerified}`,
         };
       }
 
@@ -225,7 +194,7 @@ export class StripeAdapter {
           riskStatus: "flagged",
           isDuplicate: false,
           rawPayload: session,
-          error: `Currency mismatch: expected ${req.expectedCurrency}, received ${currencyVerified}`,
+          error: `Currency mismatch: stored order expects ${req.expectedCurrency}, provider verified ${currencyVerified}`,
         };
       }
 
@@ -243,7 +212,8 @@ export class StripeAdapter {
         rawPayload: session,
       };
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Error verifying Stripe session";
+      const message =
+        err instanceof Error ? err.message : "Error verifying Stripe session";
       return {
         verified: false,
         status: "failed",

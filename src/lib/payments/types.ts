@@ -1,6 +1,6 @@
-export type PaymentGateway = "sslcommerz" | "stripe" | "dev_sandbox";
+export type PaymentGateway = "sslcommerz" | "stripe" | "dev_test_adapter";
 
-export type PaymentExecutionMode = "live" | "sandbox" | "dev_simulation";
+export type PaymentExecutionMode = "live" | "sandbox" | "dev_test";
 
 export type PaymentStatus =
   | "pending"
@@ -39,8 +39,8 @@ export interface PaymentInitiationResponse {
 export interface PaymentValidationRequest {
   gateway: PaymentGateway;
   transactionRef: string;
-  expectedAmount: number;
-  expectedCurrency: "BDT" | "USD";
+  expectedAmount: number; // Server-authoritative amount from database order
+  expectedCurrency: "BDT" | "USD"; // Server-authoritative currency from database order
   valId?: string;
   gatewayPayload: Record<string, unknown>;
 }

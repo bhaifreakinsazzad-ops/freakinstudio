@@ -29,17 +29,15 @@ export class SSLCommerzAdapter {
   async initiateSession(
     req: PaymentInitiationRequest
   ): Promise<PaymentInitiationResponse> {
-    const transactionRef = `SSLC-TX-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
+    const transactionRef = req.orderRef;
 
     if (!this.isConfigured) {
-      // Safely fall back to explicitly-labeled development simulation adapter
       return {
-        success: true,
+        success: false,
         gateway: "sslcommerz",
-        mode: "dev_simulation",
+        mode: this.isSandbox ? "sandbox" : "live",
         transactionRef,
-        redirectUrl: `${req.successUrl}?tran_id=${transactionRef}&val_id=SIM_VAL_${Date.now()}&amount=${req.amount}&currency=${req.currency}&status=VALID&simulated=true`,
-        notice: "DEVELOPMENT_SIMULATION: Real SSLCOMMERZ store credentials not configured in environment.",
+        error: "SSLCOMMERZ merchant credentials (SSLCOMMERZ_STORE_ID / SSLCOMMERZ_STORE_PASSWORD) are not configured in environment.",
       };
     }
 
@@ -47,7 +45,7 @@ export class SSLCommerzAdapter {
       const payload = new URLSearchParams({
         store_id: this.storeId,
         store_passwd: this.storePasswd,
-        total_amount: req.amount.toString(),
+        total_amount: req.amount.toFixed(2),
         currency: req.currency,
         tran_id: transactionRef,
         success_url: req.successUrl,
@@ -93,7 +91,10 @@ export class SSLCommerzAdapter {
         error: data?.failedreason || "Failed to initiate SSLCOMMERZ gateway session",
       };
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Network error during SSLCOMMERZ initialization";
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Network error during SSLCOMMERZ initialization";
       return {
         success: false,
         gateway: "sslcommerz",
@@ -108,65 +109,24 @@ export class SSLCommerzAdapter {
     req: PaymentValidationRequest
   ): Promise<PaymentValidationResponse> {
     const raw = req.gatewayPayload;
-    const mode = this.isConfigured
-      ? this.isSandbox
-        ? "sandbox"
-        : "live"
-      : "dev_simulation";
+    const mode = this.isSandbox ? "sandbox" : "live";
 
-    // Check development simulation mode
-    if (raw.simulated === "true" || !this.isConfigured) {
-      const amount = Number(raw.amount || req.expectedAmount);
-      const currency = (raw.currency as "BDT" | "USD") || req.expectedCurrency;
-
-      // Currency check
-      if (currency !== req.expectedCurrency) {
-        return {
-          verified: false,
-          status: "failed",
-          mode,
-          transactionRef: req.transactionRef,
-          amountVerified: amount,
-          currencyVerified: currency,
-          riskStatus: "flagged",
-          isDuplicate: false,
-          rawPayload: raw,
-          error: `Currency mismatch: expected ${req.expectedCurrency}, received ${currency}`,
-        };
-      }
-
-      // Amount check
-      if (Math.abs(amount - req.expectedAmount) > 0.01) {
-        return {
-          verified: false,
-          status: "failed",
-          mode,
-          transactionRef: req.transactionRef,
-          amountVerified: amount,
-          currencyVerified: currency,
-          riskStatus: "flagged",
-          isDuplicate: false,
-          rawPayload: raw,
-          error: `Amount mismatch: expected ${req.expectedAmount}, received ${amount}`,
-        };
-      }
-
+    if (!this.isConfigured) {
       return {
-        verified: true,
-        status: "paid",
+        verified: false,
+        status: "failed",
         mode,
         transactionRef: req.transactionRef,
-        amountVerified: amount,
-        currencyVerified: currency,
-        bankTranId: `SIM_BANK_${Date.now()}`,
-        cardType: "BKASH-SIMULATED",
-        riskStatus: "safe",
+        amountVerified: 0,
+        currencyVerified: req.expectedCurrency,
+        riskStatus: "flagged",
         isDuplicate: false,
         rawPayload: raw,
+        error: "SSLCOMMERZ store credentials not configured in environment.",
       };
     }
 
-    // Live or Sandbox Order Validation API
+    // Require val_id for authoritative Order Validation API handshake
     const valId = req.valId || (raw.val_id as string);
     if (!valId) {
       return {
@@ -179,7 +139,7 @@ export class SSLCommerzAdapter {
         riskStatus: "fraud",
         isDuplicate: false,
         rawPayload: raw,
-        error: "Missing val_id required for SSLCOMMERZ Order Validation API",
+        error: "Missing val_id required for SSLCOMMERZ Order Validation API.",
       };
     }
 
@@ -203,18 +163,20 @@ export class SSLCommerzAdapter {
           mode,
           transactionRef: req.transactionRef,
           amountVerified: Number(validationData.amount || 0),
-          currencyVerified: (validationData.currency_type || req.expectedCurrency) as "BDT" | "USD",
+          currencyVerified: (validationData.currency_type || req.expectedCurrency) as
+            | "BDT"
+            | "USD",
           riskStatus: "flagged",
           isDuplicate: false,
           rawPayload: validationData,
-          error: `Validation status rejected: ${validationData.status}`,
+          error: `SSLCOMMERZ rejected validation status: ${validationData.status}`,
         };
       }
 
       const verifiedAmount = Number(validationData.amount);
       const verifiedCurrency = validationData.currency_type as "BDT" | "USD";
 
-      // Rigorous financial checks
+      // Server-authoritative financial validation against stored order total
       if (Math.abs(verifiedAmount - req.expectedAmount) > 0.01) {
         return {
           verified: false,
@@ -226,7 +188,7 @@ export class SSLCommerzAdapter {
           riskStatus: "flagged",
           isDuplicate: false,
           rawPayload: validationData,
-          error: `Amount mismatch: expected ${req.expectedAmount}, received ${verifiedAmount}`,
+          error: `Amount mismatch: stored order expects ${req.expectedAmount}, provider verified ${verifiedAmount}`,
         };
       }
 
@@ -241,7 +203,7 @@ export class SSLCommerzAdapter {
           riskStatus: "flagged",
           isDuplicate: false,
           rawPayload: validationData,
-          error: `Currency mismatch: expected ${req.expectedCurrency}, received ${verifiedCurrency}`,
+          error: `Currency mismatch: stored order expects ${req.expectedCurrency}, provider verified ${verifiedCurrency}`,
         };
       }
 
@@ -262,7 +224,10 @@ export class SSLCommerzAdapter {
         rawPayload: validationData,
       };
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Order Validation API connection error";
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Order Validation API connection error";
       return {
         verified: false,
         status: "failed",
