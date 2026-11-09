@@ -1,0 +1,44 @@
+[
+  {
+    "id": "A",
+    "name": "Graphic Design & Visual Communication",
+    "name_bn": "গ্রাফিক ডিজাইন ও ভিজ্যুয়াল কমিউনিকেশন",
+    "sort_order": 1
+  },
+  {
+    "id": "B",
+    "name": "Brand Identity & Development",
+    "name_bn": "ব্র্যান্ড আইডেন্টিটি ও ডেভেলপমেন্ট",
+    "sort_order": 2
+  },
+  {
+    "id": "C",
+    "name": "Video Production, Editing & Motion Graphics",
+    "name_bn": "ভিডিও প্রোডাকশন, এডিটিং ও মোশন গ্রাফিক্স",
+    "sort_order": 3
+  },
+  {
+    "id": "D",
+    "name": "Social Media & Digital Content",
+    "name_bn": "সোশ্যাল মিডিয়া ও ডিজিটাল কনটেন্ট",
+    "sort_order": 4
+  },
+  {
+    "id": "E",
+    "name": "Advertising & Marketing Creative",
+    "name_bn": "বিজ্ঞাপন ও বিপণন ক্রিয়েটিভ",
+    "sort_order": 5
+  },
+  {
+    "id": "F",
+    "name": "Digital & AI-Powered Creative Production",
+    "name_bn": "ডিজিটাল ও এআই-পাওয়ার্ড ক্রিয়েটিভ প্রোডাকশন",
+    "sort_order": 6
+  },
+  {
+    "id": "G",
+    "name": "Corporate & Business Communication",
+    "name_bn": "কর্পোরেট ও ব্যবসায়িক যোগাযোগ",
+    "sort_order": 7
+  }
+]
