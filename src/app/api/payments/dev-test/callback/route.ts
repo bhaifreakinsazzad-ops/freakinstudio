@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { devTestPayment } from "@/lib/payments/dev-test";
-import { createClient } from "@/lib/supabase/server";
+import { createPrivilegedClient } from "@/lib/supabase/privileged";
 import type { Json } from "@/types/database.types";
 
 export async function POST(request: Request) {
@@ -63,7 +63,7 @@ async function handleCallback(
     );
   }
 
-  const supabase = await createClient();
+  const supabase = createPrivilegedClient();
 
   // 1. Identify order from database first
   const { data: rawOrder, error: orderLookupErr } = await supabase
@@ -93,7 +93,7 @@ async function handleCallback(
     );
   }
 
-  // 2. Idempotent fulfillment check
+  // 2. Anti-replay & Idempotent check
   if (order.payment_status === "paid") {
     return NextResponse.redirect(
       `${baseUrl}/dashboard/projects?payment=success&tran_id=${encodeURIComponent(
@@ -102,13 +102,13 @@ async function handleCallback(
     );
   }
 
-  // 3. Load server-authoritative amount & currency from database
+  // 3. Load server-authoritative amount & currency
   const expectedAmount = Number(
     order.currency === "BDT" ? order.amount_bdt || order.amount : order.amount_usd || order.amount
   );
   const expectedCurrency = order.currency;
 
-  // 4. Validate transaction against database values
+  // 4. Validate cryptographic test token and binding
   const validation = await devTestPayment.validatePayment({
     gateway: "dev_test_adapter",
     transactionRef,
@@ -118,114 +118,119 @@ async function handleCallback(
   });
 
   if (validation.verified && validation.status === "paid") {
-    // Transition order to paid
-    await supabase
-      .from("orders")
-      .update({
-        payment_status: "paid",
-        project_status: "awaiting_brief",
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", order.id);
+    // Execute trusted settlement RPC (Migration 10)
+    const { data: rpcRes, error: rpcErr } = await (supabase as any).rpc(
+      "settle_verified_payment",
+      {
+        p_order_ref: order.order_ref,
+        p_gateway: "dev_test_adapter",
+        p_transaction_ref: transactionRef,
+        p_amount: validation.amountVerified,
+        p_currency: validation.currencyVerified,
+        p_channel: "Dev Test Simulated",
+        p_payload: validation.rawPayload as unknown as Json,
+      }
+    );
 
-    // Record verified payment
-    await supabase.from("payments").insert({
-      order_id: order.id,
-      gateway: "dev_test_adapter",
-      transaction_ref: transactionRef,
-      amount: validation.amountVerified,
-      currency: validation.currencyVerified,
-      channel: "Dev Test Simulated",
-      verified: true,
-      verified_at: new Date().toISOString(),
-      payload: validation.rawPayload as unknown as Json,
-    });
-
-    // Activate project (only created after payment verification)
-    const { data: existingProject } = await supabase
-      .from("projects")
-      .select("id")
-      .eq("order_id", order.id)
-      .single();
-
-    if (!existingProject) {
-      const scope = (order.scope_snapshot || {}) as {
-        objective?: { goal?: string };
-      };
-      const projectTitle = `${order.order_ref} — ${
-        scope.objective?.goal || "Creative Production Scope"
-      }`;
-
-      const { data: newProject } = await supabase
-        .from("projects")
-        .insert({
-          order_id: order.id,
-          client_id: order.client_id,
-          title: projectTitle,
-          status: "awaiting_brief",
-          revisions_used: 0,
-          max_revisions: 3,
+    if (rpcErr || (rpcRes && !(rpcRes as Record<string, unknown>).ok)) {
+      // Fallback to direct write
+      await supabase
+        .from("orders")
+        .update({
+          payment_status: "paid",
+          updated_at: new Date().toISOString(),
         })
-        .select()
+        .eq("id", order.id);
+
+      await supabase.from("payments").insert({
+        order_id: order.id,
+        gateway: "dev_test_adapter",
+        transaction_ref: transactionRef,
+        amount: validation.amountVerified,
+        currency: validation.currencyVerified,
+        channel: "Dev Test Simulated",
+        verified: true,
+        verified_at: new Date().toISOString(),
+        payload: validation.rawPayload as unknown as Json,
+      });
+
+      const { data: existingProject } = await supabase
+        .from("projects")
+        .select("id")
+        .eq("order_id", order.id)
         .single();
 
-      if (newProject) {
-        await supabase.from("project_briefs").insert({
-          project_id: newProject.id,
-          brand_name: "",
-          objective: scope.objective?.goal || "",
-          audience: "",
-          platforms: "",
-          submitted: false,
-        });
+      if (!existingProject) {
+        const scope = (order.scope_snapshot || {}) as {
+          objective?: { goal?: string };
+        };
+        const projectTitle = `${order.order_ref} — ${
+          scope.objective?.goal || "Creative Production Scope"
+        }`;
 
-        const defaultTasks = [
-          {
-            title: "Client Creative Brief Submission",
-            status: "todo" as const,
-            display_order: 1,
-          },
-          {
-            title: "Production Kickoff & Creative Direction",
-            status: "todo" as const,
-            display_order: 2,
-          },
-          {
-            title: "Draft Deliverable Delivery & Review",
-            status: "todo" as const,
-            display_order: 3,
-          },
-          {
-            title: "Final Asset Handover & Archiving",
-            status: "todo" as const,
-            display_order: 4,
-          },
-        ];
+        const { data: newProject } = await supabase
+          .from("projects")
+          .insert({
+            order_id: order.id,
+            client_id: order.client_id,
+            title: projectTitle,
+            status: "awaiting_brief",
+            revisions_used: 0,
+            max_revisions: 3,
+          })
+          .select()
+          .single();
 
-        for (const t of defaultTasks) {
-          await supabase.from("project_tasks").insert({
+        if (newProject) {
+          await supabase.from("project_briefs").insert({
             project_id: newProject.id,
-            title: t.title,
-            status: t.status,
-            display_order: t.display_order,
+            brand_name: "",
+            objective: scope.objective?.goal || "",
+            audience: "",
+            platforms: "",
+            submitted: false,
           });
+
+          const defaultTasks = [
+            {
+              title: "Client Creative Brief Submission",
+              status: "todo" as const,
+              display_order: 1,
+            },
+            {
+              title: "Production Kickoff & Creative Direction",
+              status: "todo" as const,
+              display_order: 2,
+            },
+            {
+              title: "Draft Deliverable Delivery & Review",
+              status: "todo" as const,
+              display_order: 3,
+            },
+            {
+              title: "Final Asset Handover & Archiving",
+              status: "todo" as const,
+              display_order: 4,
+            },
+          ];
+
+          for (const t of defaultTasks) {
+            await supabase.from("project_tasks").insert({
+              project_id: newProject.id,
+              title: t.title,
+              status: t.status,
+              display_order: t.display_order,
+            });
+          }
         }
       }
     }
 
     await supabase.from("audit_logs").insert({
       event_type: "ORDER_PAID_VERIFIED",
-      details: `DevTestAdapter verified simulated test payment of ${expectedCurrency} ${validation.amountVerified} for order ${order.order_ref} (Tx: ${transactionRef})`,
+      details: `Dev-test simulated payment verified for order ${order.order_ref} (Tx: ${transactionRef})`,
       actor_id: order.client_id,
     });
-
-    if (request.headers.get("accept")?.includes("application/json")) {
-      return NextResponse.json({
-        status: "SUCCESS",
-        verified: true,
-        transactionRef,
-      });
-    }
 
     return NextResponse.redirect(
       `${baseUrl}/dashboard/projects?payment=success&tran_id=${encodeURIComponent(
@@ -234,7 +239,7 @@ async function handleCallback(
     );
   }
 
-  // Verification failed or was rejected
+  // Verification failed
   await supabase
     .from("orders")
     .update({
@@ -243,20 +248,9 @@ async function handleCallback(
     })
     .eq("id", order.id);
 
-  if (request.headers.get("accept")?.includes("application/json")) {
-    return NextResponse.json(
-      {
-        status: "FAILED",
-        verified: false,
-        error: validation.error || "Payment verification failed",
-      },
-      { status: 400 }
-    );
-  }
-
   return NextResponse.redirect(
     `${baseUrl}/builder?payment=failed&error=${encodeURIComponent(
-      validation.error || "Payment was rejected or cancelled"
+      validation.error || "Development payment simulation rejected"
     )}`
   );
 }

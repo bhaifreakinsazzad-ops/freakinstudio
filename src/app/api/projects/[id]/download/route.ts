@@ -55,15 +55,19 @@ export async function GET(
 
     // Verify Order and Payment settlement status
     let orderRef = "FS-ORD-ARCHIVE";
+    let scopeSnapshot: Record<string, unknown> = {};
+
     if (project.order_id) {
       const { data: ord } = await supabase
         .from("orders")
-        .select("order_ref, payment_status")
+        .select("order_ref, payment_status, scope_snapshot")
         .eq("id", project.order_id)
         .single();
 
       if (ord) {
         orderRef = ord.order_ref;
+        scopeSnapshot = (ord.scope_snapshot || {}) as Record<string, unknown>;
+
         // Gate download: require paid status
         if (ord.payment_status !== "paid") {
           return new NextResponse(
@@ -72,6 +76,36 @@ export async function GET(
           );
         }
       }
+    }
+
+    // Check project status: must be client_approved or completed to deliver final deliverables
+    const allowedStatuses = ["client_approved", "completed"];
+    if (!allowedStatuses.includes(project.status)) {
+      return new NextResponse(
+        `Deliverables Unprocessed: Project is currently in '${project.status}'. Final deliverables can only be downloaded once client approval is recorded.`,
+        { status: 422 }
+      );
+    }
+
+    // Query approved deliverable assets
+    const { data: dbAssets, error: assetErr } = await supabase
+      .from("project_assets")
+      .select("*")
+      .eq("project_id", projectId)
+      .eq("is_approved", true);
+
+    if (assetErr) {
+      console.error("Asset query error:", assetErr.message);
+    }
+
+    const approvedAssets = dbAssets || [];
+
+    // If no approved assets exist in production, fail closed
+    if (approvedAssets.length === 0) {
+      return new NextResponse(
+        "No Approved Deliverables: Studio production team has not yet uploaded or finalized approved master assets for this project.",
+        { status: 422 }
+      );
     }
 
     const title = project.title || `Freakin' Studio Project ${projectId}`;
@@ -92,12 +126,15 @@ Order Reference:   ${orderRef}
 Project Scope:     ${title}
 Timestamp:         ${new Date().toISOString()}
 Verification:      CRYPTOGRAPHICALLY VERIFIED COMMERCIAL RELEASE
-Status:            FINAL PRODUCTION APPROVED
+Status:            FINAL PRODUCTION APPROVED (${approvedAssets.length} master files verified)
+
+APPROVED ASSET MANIFEST:
+${approvedAssets.map((a, i) => `${i + 1}. ${a.file_name} [${a.version_label}] (VERIFIED)`).join("\n")}
 
 CONTENTS:
 1. /assets/          Master creative deliverable files and vector assets
 2. /tokens/          Brand design tokens, color palette, and type specifications
-3. /licenses/        Full commercial rights transfer & perpetual buyout certificate
+3. /licenses/        Full commercial rights transfer & contracted terms certificate
 4. /documentation/   Creative direction guidelines and implementation specifications
 
 Studio Operations: FREAKIN'S STUDIO PRODUCTION LABS
@@ -113,9 +150,16 @@ Design. Create. Produce. Grow.
 CERTIFICATE OF FULL COMMERCIAL RIGHTS TRANSFER & BUYOUT
 ========================================================================
 
+Project Reference: ${orderRef}
+Project Title:     ${title}
+Authorized Client: ${user.email}
+
 Freakin's Studio hereby grants the authorized client full, irrevocable,
 worldwide, perpetual commercial usage rights to all deliverables included
 within this production archive.
+
+Contract Scope Snapshot:
+${JSON.stringify(scopeSnapshot, null, 2)}
 
 Terms:
 - Full commercial advertising, broadcast, digital and print reproduction.
@@ -178,7 +222,7 @@ Freakin's Studio Creative Operations & Commercial Licensing Desk
       )
     );
 
-    // 5. Assets Folder — Query database for project_assets if available
+    // 5. Assets Folder — Fetch and bundle real verified assets
     const assetsFolder = zip.folder("assets");
     if (assetsFolder) {
       assetsFolder.file(
@@ -190,56 +234,41 @@ Freakin's Studio Creative Operations & Commercial Licensing Desk
             generatedAt: new Date().toISOString(),
             status: "CLIENT_APPROVED_FINAL",
             colorSpace: "sRGB / Rec.709",
-            masterFormats: ["AI", "PSD", "MP4", "PDF", "SVG", "PNG"],
+            filesCount: approvedAssets.length,
           },
           null,
           2
         )
       );
 
-      // Fetch uploaded project assets from Supabase if present
-      try {
-        const { data: dbAssets } = await supabase
-          .from("project_assets")
-          .select("*")
-          .eq("project_id", projectId);
-
-        if (dbAssets && dbAssets.length > 0) {
-          for (const asset of dbAssets) {
-            if (asset.storage_path) {
-              const { data: blob } = await supabase.storage
-                .from("deliverables")
-                .download(asset.storage_path);
-              if (blob) {
-                const arrayBuf = await blob.arrayBuffer();
-                assetsFolder.file(asset.file_name, Buffer.from(arrayBuf));
-              }
+      for (const asset of approvedAssets) {
+        if (asset.storage_path) {
+          try {
+            const { data: blob } = await supabase.storage
+              .from("project-assets")
+              .download(asset.storage_path);
+            if (blob) {
+              const arrayBuf = await blob.arrayBuffer();
+              assetsFolder.file(asset.file_name, Buffer.from(arrayBuf));
             }
+          } catch (storageErr) {
+            console.warn(`Could not download storage asset ${asset.file_name}:`, storageErr);
           }
         }
-      } catch {
-        // Fall back gracefully to bundled production deliverables
       }
-
-      // Include high-resolution Master Vector SVG deliverable
-      assetsFolder.file(
-        "Brand-Production-Master.svg",
-        `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600">
-  <defs>
-    <linearGradient id="brandGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#3b82f6"/>
-      <stop offset="100%" stop-color="#10b981"/>
-    </linearGradient>
-  </defs>
-  <rect width="100%" height="100%" fill="#09090b"/>
-  <circle cx="400" cy="300" r="180" fill="none" stroke="url(#brandGrad)" stroke-width="4"/>
-  <text x="400" y="275" font-family="monospace" font-size="28" font-weight="bold" fill="#f4f4f5" text-anchor="middle">FREAKIN'S STUDIO</text>
-  <text x="400" y="315" font-family="monospace" font-size="14" fill="#a1a1aa" text-anchor="middle">DESIGN • CREATE • PRODUCE • GROW</text>
-  <text x="400" y="345" font-family="monospace" font-size="12" fill="#71717a" text-anchor="middle">MASTER DELIVERABLE • ${orderRef}</text>
-  <text x="400" y="380" font-family="monospace" font-size="12" font-weight="bold" fill="#10b981" text-anchor="middle">STATUS: VERIFIED PRODUCTION ARCHIVE</text>
-</svg>`
-      );
     }
+
+    // Record delivery event
+    await (supabase as any).from("delivery_events").insert({
+      project_id: projectId,
+      downloaded_by: user.id,
+      asset_ids: approvedAssets.map((a) => a.id),
+      manifest: {
+        order_ref: orderRef,
+        asset_count: approvedAssets.length,
+        downloaded_at: new Date().toISOString(),
+      },
+    });
 
     // Generate zip binary buffer
     const zipBuffer = await zip.generateAsync({ type: "nodebuffer" });

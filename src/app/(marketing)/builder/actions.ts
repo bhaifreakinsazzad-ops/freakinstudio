@@ -189,6 +189,50 @@ export async function requestQuoteAction(draft: PackageDraft) {
       .toString("hex")
       .toUpperCase()}`;
 
+    const quoteItemsPayload = draft.services.map((sid) => {
+      const srv = catalogServices.find((s) => s.id === sid);
+      const cfg = draft.serviceConfigs[sid] || { quantity: 1 };
+      const qty = cfg.quantity || 1;
+      return {
+        service_id: sid,
+        title: srv?.title || `Service ${sid}`,
+        quantity: qty,
+        unit_rate_bdt: srv?.base_bdt || 0,
+        unit_rate_usd: srv?.base_usd || 0,
+        line_total_bdt: (srv?.base_bdt || 0) * qty,
+        line_total_usd: (srv?.base_usd || 0) * qty,
+        config: cfg,
+      };
+    });
+
+    // Attempt RPC first (Directive 11.0 Migration 10 trusted transaction)
+    const { data: rpcRes, error: rpcErr } = await (supabase as any).rpc(
+      "create_quotation_request" as unknown as "create_quotation_request",
+      {
+        p_client_id: user.id,
+        p_currency: calculatedPricing.currency,
+        p_amount_bdt: calculatedPricing.finalBDT,
+        p_amount_usd: calculatedPricing.finalUSD,
+        p_scope: {
+          objective: draft.objective,
+          services: draft.services,
+          serviceConfigs: draft.serviceConfigs,
+          selectedAddOns: draft.selectedAddOns,
+          pricing: calculatedPricing,
+        } as unknown as Json,
+        p_items: quoteItemsPayload as unknown as Json,
+        p_notes:
+          draft.objective?.notes ||
+          "Lodged via 7-Step Signature Package Builder",
+      }
+    );
+
+    if (!rpcErr && rpcRes && (rpcRes as Record<string, unknown>).ok) {
+      const parsed = rpcRes as { ok: boolean; quote_id: string; quote_ref: string };
+      return { ok: true, quoteRef: parsed.quote_ref, quoteId: parsed.quote_id };
+    }
+
+    // Fallback to direct client table operations if RPC not yet deployed
     const { data: quote, error: quoteErr } = await supabase
       .from("quotes")
       .insert({
@@ -213,39 +257,27 @@ export async function requestQuoteAction(draft: PackageDraft) {
       .single();
 
     if (quoteErr || !quote) {
-      console.error("Quote insert error:", quoteErr?.message);
+      console.error("Quote insert error:", quoteErr?.message || rpcErr?.message);
       return {
         ok: false,
         error: `Failed to lodge quotation request: ${
-          quoteErr?.message || "Database insert error"
+          quoteErr?.message || rpcErr?.message || "Database insert error"
         }`,
       };
     }
 
-    // Insert accurate item-level rows per Directive 10.0 Section 5
-    for (const sid of draft.services) {
-      const srv = catalogServices.find((s) => s.id === sid);
-      const cfg = draft.serviceConfigs[sid] || { quantity: 1 };
-      const qty = cfg.quantity || 1;
-      const rateBDT = (srv?.base_bdt || 0) * qty;
-      const rateUSD = (srv?.base_usd || 0) * qty;
-
-      const { error: itemErr } = await supabase.from("quote_items").insert({
+    for (const item of quoteItemsPayload) {
+      await supabase.from("quote_items").insert({
         quote_id: quote.id,
-        service_id: sid,
-        title: srv?.title || `Service ${sid}`,
-        quantity: qty,
-        rate_snapshot_bdt: rateBDT,
-        rate_snapshot_usd: rateUSD,
-        config: cfg as unknown as Json,
+        service_id: item.service_id,
+        title: item.title,
+        quantity: item.quantity,
+        rate_snapshot_bdt: item.line_total_bdt,
+        rate_snapshot_usd: item.line_total_usd,
+        config: item.config as unknown as Json,
       });
-
-      if (itemErr) {
-        console.error(`Quote item insert error for ${sid}:`, itemErr.message);
-      }
     }
 
-    // Log audit event
     await supabase.from("audit_logs").insert({
       event_type: "QUOTE_REQUESTED",
       details: `Client lodged formal quotation request ${quoteRef} for ${draft.services.length} services`,
@@ -331,58 +363,96 @@ export async function createOrderFromBuilderAction(
         ? calculatedPricing.finalBDT
         : calculatedPricing.finalUSD;
 
-    // CRITICAL DEFECT A FIX:
-    // Initial order state is strictly 'awaiting_payment' (NEVER 'paid').
-    // Project is NEVER created here before payment verification.
-    const { data: order, error: orderErr } = await supabase
-      .from("orders")
-      .insert({
-        order_ref: orderRef,
-        client_id: user.id,
-        currency: calculatedPricing.currency,
-        amount: finalAmount,
-        amount_bdt: calculatedPricing.finalBDT,
-        amount_usd: calculatedPricing.finalUSD,
-        payment_status: "awaiting_payment",
-        project_status: "awaiting_brief",
-        scope_snapshot: {
+    const orderItemsPayload = draft.services.map((sid) => {
+      const srv = catalogServices.find((s) => s.id === sid);
+      const cfg = draft.serviceConfigs[sid] || { quantity: 1 };
+      const qty = cfg.quantity || 1;
+      return {
+        service_id: sid,
+        title: srv?.title || `Service ${sid}`,
+        quantity: qty,
+        unit_rate_bdt: srv?.base_bdt || 0,
+        unit_rate_usd: srv?.base_usd || 0,
+        line_total_bdt: (srv?.base_bdt || 0) * qty,
+        line_total_usd: (srv?.base_usd || 0) * qty,
+        config: cfg,
+      };
+    });
+
+    let orderId = "";
+    const isTestOrder = resolvedGateway === "dev_test_adapter";
+
+    // Attempt RPC first (Directive 11.0 Migration 10 trusted transaction)
+    const { data: rpcOrderRes, error: rpcOrderErr } = await (supabase as any).rpc(
+      "create_pending_order" as unknown as "create_pending_order",
+      {
+        p_client_id: user.id,
+        p_quote_id: null,
+        p_order_ref: orderRef,
+        p_currency: calculatedPricing.currency,
+        p_amount: finalAmount,
+        p_amount_bdt: calculatedPricing.finalBDT,
+        p_amount_usd: calculatedPricing.finalUSD,
+        p_scope: {
           objective: draft.objective,
           services: draft.services,
           serviceConfigs: draft.serviceConfigs,
           selectedAddOns: draft.selectedAddOns,
           pricing: calculatedPricing,
         } as unknown as Json,
-      })
-      .select()
-      .single();
+        p_items: orderItemsPayload as unknown as Json,
+        p_is_test: isTestOrder,
+      }
+    );
 
-    if (orderErr || !order) {
-      console.error("Order insert error:", orderErr?.message);
-      return {
-        ok: false,
-        error: `Failed to create order: ${
-          orderErr?.message || "Database insert error"
-        }`,
-      };
-    }
+    if (!rpcOrderErr && rpcOrderRes && (rpcOrderRes as Record<string, unknown>).ok) {
+      orderId = (rpcOrderRes as { order_id: string }).order_id;
+    } else {
+      // Direct client fallback
+      const { data: order, error: orderErr } = await supabase
+        .from("orders")
+        .insert({
+          order_ref: orderRef,
+          client_id: user.id,
+          currency: calculatedPricing.currency,
+          amount: finalAmount,
+          amount_bdt: calculatedPricing.finalBDT,
+          amount_usd: calculatedPricing.finalUSD,
+          payment_status: "awaiting_payment",
+          scope_snapshot: {
+            objective: draft.objective,
+            services: draft.services,
+            serviceConfigs: draft.serviceConfigs,
+            selectedAddOns: draft.selectedAddOns,
+            pricing: calculatedPricing,
+          } as unknown as Json,
+        })
+        .select()
+        .single();
 
-    // Insert order items
-    for (const sid of draft.services) {
-      const srv = catalogServices.find((s) => s.id === sid);
-      const cfg = draft.serviceConfigs[sid] || { quantity: 1 };
-      const qty = cfg.quantity || 1;
-      const rateBDT = (srv?.base_bdt || 0) * qty;
-      const rateUSD = (srv?.base_usd || 0) * qty;
+      if (orderErr || !order) {
+        console.error("Order insert error:", orderErr?.message || rpcOrderErr?.message);
+        return {
+          ok: false,
+          error: `Failed to create order: ${
+            orderErr?.message || rpcOrderErr?.message || "Database insert error"
+          }`,
+        };
+      }
 
-      await supabase.from("order_items").insert({
-        order_id: order.id,
-        service_id: sid,
-        title: srv?.title || `Service ${sid}`,
-        quantity: qty,
-        rate_bdt: rateBDT,
-        rate_usd: rateUSD,
-        config: cfg as unknown as Json,
-      });
+      orderId = order.id;
+
+      for (const item of orderItemsPayload) {
+        await supabase.from("order_items").insert({
+          order_id: orderId,
+          service_id: item.service_id,
+          title: item.title,
+          quantity: item.quantity,
+          rate_bdt: item.line_total_bdt,
+          rate_usd: item.line_total_usd,
+          config: item.config as unknown as Json,
+        });
+      }
     }
 
     // Determine callback slug
@@ -396,8 +466,8 @@ export async function createOrderFromBuilderAction(
     // Initiate payment session with payment adapter
     const paymentInit = await initiatePayment(
       {
-        orderId: order.id,
-        orderRef: order.order_ref,
+        orderId: orderId,
+        orderRef: orderRef,
         amount: finalAmount,
         currency: calculatedPricing.currency,
         customerName:
@@ -422,7 +492,7 @@ export async function createOrderFromBuilderAction(
           payment_status: "failed",
           updated_at: new Date().toISOString(),
         })
-        .eq("id", order.id);
+        .eq("id", orderId);
 
       return {
         ok: false,
@@ -433,11 +503,11 @@ export async function createOrderFromBuilderAction(
 
     // CRITICAL FIX: Insert unverified payment record (verified: false)
     await supabase.from("payments").insert({
-      order_id: order.id,
+      order_id: orderId,
       gateway: resolvedGateway,
-      transaction_ref: paymentInit.transactionRef || order.order_ref,
-      amount: order.amount,
-      currency: order.currency,
+      transaction_ref: paymentInit.transactionRef || orderRef,
+      amount: finalAmount,
+      currency: calculatedPricing.currency,
       channel:
         resolvedGateway === "sslcommerz"
           ? "bKash / Card"
@@ -457,14 +527,14 @@ export async function createOrderFromBuilderAction(
     // Log audit event
     await supabase.from("audit_logs").insert({
       event_type: "ORDER_CREATED",
-      details: `Order ${order.order_ref} created awaiting payment verification via ${resolvedGateway} (Tx: ${paymentInit.transactionRef})`,
+      details: `Order ${orderRef} created awaiting payment verification via ${resolvedGateway} (Tx: ${paymentInit.transactionRef})`,
       actor_id: user.id,
     });
 
     return {
       ok: true,
-      orderRef: order.order_ref,
-      orderId: order.id,
+      orderRef: orderRef,
+      orderId: orderId,
       txId: paymentInit.transactionRef,
       redirectUrl: paymentInit.redirectUrl,
     };
