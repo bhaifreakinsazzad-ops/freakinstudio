@@ -1,7 +1,11 @@
 "use server";
 
+import crypto from "crypto";
 import { createClient } from "@/lib/supabase/server";
 import { initiatePayment } from "@/lib/payments";
+import { getCatalogServices, getAllAddOns } from "@/lib/catalog";
+import { calculatePricingSummary, APPROVED_ENTERPRISE_POLICY } from "@/lib/pricing/engine";
+import type { PaymentGateway } from "@/lib/payments/types";
 import type { Json } from "@/types/database.types";
 import type { PackageDraft } from "@/types/domain";
 
@@ -31,7 +35,11 @@ export async function saveDraftAction(draft: PackageDraft) {
     );
 
     if (error) {
-      console.warn("DB draft save notice:", error.message);
+      console.warn("DB draft save error:", error.message);
+      return {
+        ok: false,
+        error: `Failed to save draft to database: ${error.message}`,
+      };
     }
 
     return { ok: true, isGuest: false, draftId: draft.id };
@@ -63,8 +71,8 @@ export async function getUserDraftsAction(): Promise<{
       .order("updated_at", { ascending: false });
 
     if (error) {
-      console.warn("DB draft fetch notice:", error.message);
-      return { ok: true, drafts: [] };
+      console.warn("DB draft fetch error:", error.message);
+      return { ok: false, drafts: [], error: error.message };
     }
 
     interface PackageDraftRow {
@@ -77,13 +85,17 @@ export async function getUserDraftsAction(): Promise<{
       updated_at: string;
     }
 
-    const drafts: PackageDraft[] = ((data as unknown as PackageDraftRow[]) || []).map((row) => ({
+    const drafts: PackageDraft[] = (
+      (data as unknown as PackageDraftRow[]) || []
+    ).map((row) => ({
       id: row.id,
       savedAt: row.updated_at || new Date().toISOString(),
       objective: (row.objective || {}) as PackageDraft["objective"],
       services: (row.services || []) as string[],
-      serviceConfigs: (row.service_configs || {}) as PackageDraft["serviceConfigs"],
-      selectedAddOns: (row.selected_add_ons || {}) as PackageDraft["selectedAddOns"],
+      serviceConfigs: (row.service_configs ||
+        {}) as PackageDraft["serviceConfigs"],
+      selectedAddOns: (row.selected_add_ons ||
+        {}) as PackageDraft["selectedAddOns"],
       pricing: (row.pricing_summary || {
         currency: "BDT",
         subtotalBDT: 0,
@@ -102,12 +114,15 @@ export async function getUserDraftsAction(): Promise<{
 
     return { ok: true, drafts };
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Failed to load drafts";
+    const message =
+      err instanceof Error ? err.message : "Failed to load drafts";
     return { ok: false, drafts: [], error: message };
   }
 }
 
-export async function deleteDraftAction(draftId: string): Promise<{ ok: boolean; error?: string }> {
+export async function deleteDraftAction(
+  draftId: string
+): Promise<{ ok: boolean; error?: string }> {
   try {
     const supabase = await createClient();
     const {
@@ -125,12 +140,14 @@ export async function deleteDraftAction(draftId: string): Promise<{ ok: boolean;
       .eq("user_id", user.id);
 
     if (error) {
-      console.warn("DB draft delete notice:", error.message);
+      console.warn("DB draft delete error:", error.message);
+      return { ok: false, error: `Failed to delete draft: ${error.message}` };
     }
 
     return { ok: true };
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Failed to delete draft";
+    const message =
+      err instanceof Error ? err.message : "Failed to delete draft";
     return { ok: false, error: message };
   }
 }
@@ -146,55 +163,86 @@ export async function requestQuoteAction(draft: PackageDraft) {
       return {
         ok: false,
         requiresAuth: true,
-        message: "Please sign in or create an account to lodge a formal quotation request.",
+        message:
+          "Please sign in or create an account to lodge a formal quotation request.",
       };
     }
 
-    const quoteRef = `FS-QT-${Math.floor(100 + Math.random() * 900)}`;
+    // Server-authoritative price recalculation per Directive 10.0 Section 5
+    const currency = draft.pricing?.currency || "BDT";
+    const [catalogServices, catalogAddOns] = await Promise.all([
+      getCatalogServices(),
+      getAllAddOns(),
+    ]);
+    const calculatedPricing = calculatePricingSummary({
+      serviceIds: draft.services,
+      serviceConfigs: draft.serviceConfigs,
+      selectedAddOns: draft.selectedAddOns,
+      currency,
+      catalogServices,
+      catalogAddOns,
+      policy: APPROVED_ENTERPRISE_POLICY,
+    });
+
+    const quoteRef = `FS-QT-${new Date().getFullYear()}-${crypto
+      .randomBytes(3)
+      .toString("hex")
+      .toUpperCase()}`;
 
     const { data: quote, error: quoteErr } = await supabase
       .from("quotes")
       .insert({
         quote_ref: quoteRef,
         client_id: user.id,
-        currency: draft.pricing.currency,
-        amount_bdt: draft.pricing.finalBDT,
-        amount_usd: draft.pricing.finalUSD,
+        currency: calculatedPricing.currency,
+        amount_bdt: calculatedPricing.finalBDT,
+        amount_usd: calculatedPricing.finalUSD,
         status: "pending",
         scope_snapshot: {
           objective: draft.objective,
           services: draft.services,
           serviceConfigs: draft.serviceConfigs,
           selectedAddOns: draft.selectedAddOns,
-          pricing: draft.pricing,
+          pricing: calculatedPricing,
         } as unknown as Json,
-        notes: draft.objective.notes || "Lodged via 7-Step Signature Package Builder",
+        notes:
+          draft.objective?.notes ||
+          "Lodged via 7-Step Signature Package Builder",
       })
       .select()
       .single();
 
     if (quoteErr || !quote) {
-      console.warn("Quote insert error:", quoteErr?.message);
+      console.error("Quote insert error:", quoteErr?.message);
       return {
-        ok: true,
-        quoteRef,
-        quoteId: `qt-demo-${Date.now()}`,
-        notice: "Quotation request registered in session scope.",
+        ok: false,
+        error: `Failed to lodge quotation request: ${
+          quoteErr?.message || "Database insert error"
+        }`,
       };
     }
 
-    // Insert items
+    // Insert accurate item-level rows per Directive 10.0 Section 5
     for (const sid of draft.services) {
+      const srv = catalogServices.find((s) => s.id === sid);
       const cfg = draft.serviceConfigs[sid] || { quantity: 1 };
-      await supabase.from("quote_items").insert({
+      const qty = cfg.quantity || 1;
+      const rateBDT = (srv?.base_bdt || 0) * qty;
+      const rateUSD = (srv?.base_usd || 0) * qty;
+
+      const { error: itemErr } = await supabase.from("quote_items").insert({
         quote_id: quote.id,
         service_id: sid,
-        title: `Service ${sid}`,
-        quantity: cfg.quantity || 1,
-        rate_snapshot_bdt: draft.pricing.subtotalBDT,
-        rate_snapshot_usd: draft.pricing.subtotalUSD,
+        title: srv?.title || `Service ${sid}`,
+        quantity: qty,
+        rate_snapshot_bdt: rateBDT,
+        rate_snapshot_usd: rateUSD,
         config: cfg as unknown as Json,
       });
+
+      if (itemErr) {
+        console.error(`Quote item insert error for ${sid}:`, itemErr.message);
+      }
     }
 
     // Log audit event
@@ -206,7 +254,10 @@ export async function requestQuoteAction(draft: PackageDraft) {
 
     return { ok: true, quoteRef, quoteId: quote.id };
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Failed to process quotation request";
+    const message =
+      err instanceof Error
+        ? err.message
+        : "Failed to process quotation request";
     return { ok: false, error: message };
   }
 }
@@ -229,142 +280,197 @@ export async function createOrderFromBuilderAction(
       };
     }
 
-    const orderRef = `FS-ORD-${Math.floor(1000 + Math.random() * 9000)}`;
-    const txId = `${gateway.toUpperCase()}-TX-${Math.floor(100000 + Math.random() * 900000)}`;
-    const finalAmount =
-      draft.pricing.currency === "BDT"
-        ? draft.pricing.finalBDT
-        : draft.pricing.finalUSD;
+    // Server-authoritative price recalculation per Directive 10.0 Defect A & Section 3
+    const currency = draft.pricing?.currency || "BDT";
+    const [catalogServices, catalogAddOns] = await Promise.all([
+      getCatalogServices(),
+      getAllAddOns(),
+    ]);
+    const calculatedPricing = calculatePricingSummary({
+      serviceIds: draft.services,
+      serviceConfigs: draft.serviceConfigs,
+      selectedAddOns: draft.selectedAddOns,
+      currency,
+      catalogServices,
+      catalogAddOns,
+      policy: APPROVED_ENTERPRISE_POLICY,
+    });
 
+    // Gating check: Block direct checkout if quotation is required
+    if (calculatedPricing.quoteRequired) {
+      return {
+        ok: false,
+        error: `This package configuration requires a formal studio quotation before order creation: ${calculatedPricing.quoteReasons.join(
+          "; "
+        )}`,
+      };
+    }
+
+    // Gate development sandbox adapter in production
+    if (gateway === "sandbox" && process.env.NODE_ENV === "production") {
+      return {
+        ok: false,
+        error: "Development sandbox payment adapter is disabled in production.",
+      };
+    }
+
+    const resolvedGateway: PaymentGateway =
+      gateway === "stripe"
+        ? "stripe"
+        : gateway === "sslcommerz"
+        ? "sslcommerz"
+        : "dev_test_adapter";
+
+    const orderRef = `FS-ORD-${new Date().getFullYear()}-${crypto
+      .randomBytes(3)
+      .toString("hex")
+      .toUpperCase()}`;
+
+    const finalAmount =
+      calculatedPricing.currency === "BDT"
+        ? calculatedPricing.finalBDT
+        : calculatedPricing.finalUSD;
+
+    // CRITICAL DEFECT A FIX:
+    // Initial order state is strictly 'awaiting_payment' (NEVER 'paid').
+    // Project is NEVER created here before payment verification.
     const { data: order, error: orderErr } = await supabase
       .from("orders")
       .insert({
         order_ref: orderRef,
         client_id: user.id,
-        currency: draft.pricing.currency,
+        currency: calculatedPricing.currency,
         amount: finalAmount,
-        amount_bdt: draft.pricing.finalBDT,
-        amount_usd: draft.pricing.finalUSD,
-        payment_status: "paid",
+        amount_bdt: calculatedPricing.finalBDT,
+        amount_usd: calculatedPricing.finalUSD,
+        payment_status: "awaiting_payment",
         project_status: "awaiting_brief",
         scope_snapshot: {
           objective: draft.objective,
           services: draft.services,
           serviceConfigs: draft.serviceConfigs,
           selectedAddOns: draft.selectedAddOns,
-          pricing: draft.pricing,
+          pricing: calculatedPricing,
         } as unknown as Json,
       })
       .select()
       .single();
 
     if (orderErr || !order) {
-      console.warn("Order insert note:", orderErr?.message);
+      console.error("Order insert error:", orderErr?.message);
+      return {
+        ok: false,
+        error: `Failed to create order: ${
+          orderErr?.message || "Database insert error"
+        }`,
+      };
     }
 
-    const effectiveOrderId = order?.id || `ord-demo-${Date.now()}`;
+    // Insert order items
+    for (const sid of draft.services) {
+      const srv = catalogServices.find((s) => s.id === sid);
+      const cfg = draft.serviceConfigs[sid] || { quantity: 1 };
+      const qty = cfg.quantity || 1;
+      const rateBDT = (srv?.base_bdt || 0) * qty;
+      const rateUSD = (srv?.base_usd || 0) * qty;
+
+      await supabase.from("order_items").insert({
+        order_id: order.id,
+        service_id: sid,
+        title: srv?.title || `Service ${sid}`,
+        quantity: qty,
+        rate_bdt: rateBDT,
+        rate_usd: rateUSD,
+        config: cfg as unknown as Json,
+      });
+    }
+
+    // Determine callback slug
+    const callbackSlug =
+      resolvedGateway === "stripe"
+        ? "stripe"
+        : resolvedGateway === "sslcommerz"
+        ? "sslcommerz"
+        : "dev-test";
 
     // Initiate payment session with payment adapter
     const paymentInit = await initiatePayment(
       {
-        orderId: effectiveOrderId,
-        orderRef,
+        orderId: order.id,
+        orderRef: order.order_ref,
         amount: finalAmount,
-        currency: draft.pricing.currency,
-        customerName: user.user_metadata?.full_name || user.email || "Freakin Studio Client",
+        currency: calculatedPricing.currency,
+        customerName:
+          user.user_metadata?.full_name ||
+          user.email ||
+          "Freakin Studio Client",
         customerEmail: user.email || "client@freakinstudio.com",
         customerPhone: user.user_metadata?.phone || "01700000000",
-        successUrl: `/api/payments/${gateway === "stripe" ? "stripe" : "sslcommerz"}/callback`,
-        failUrl: `/api/payments/${gateway === "stripe" ? "stripe" : "sslcommerz"}/callback`,
-        cancelUrl: `/api/payments/${gateway === "stripe" ? "stripe" : "sslcommerz"}/callback`,
-        ipnUrl: `/api/payments/${gateway === "stripe" ? "stripe" : "sslcommerz"}/callback`,
+        successUrl: `/api/payments/${callbackSlug}/callback`,
+        failUrl: `/api/payments/${callbackSlug}/callback`,
+        cancelUrl: `/api/payments/${callbackSlug}/callback`,
+        ipnUrl: `/api/payments/${callbackSlug}/callback`,
       },
-      gateway === "stripe" ? "stripe" : gateway === "sslcommerz" ? "sslcommerz" : "dev_sandbox"
+      resolvedGateway
     );
 
-    // Create payment record in DB if order row exists
-    if (order) {
-      await supabase.from("payments").insert({
-        order_id: order.id,
-        gateway,
-        transaction_ref: paymentInit.transactionRef || txId,
-        amount: order.amount,
-        currency: order.currency,
-        channel: gateway === "sslcommerz" ? "bKash / Card" : "Card",
-        verified: true,
-        verified_at: new Date().toISOString(),
-      });
-
-      // Create project
-      const { data: project } = await supabase
-        .from("projects")
-        .insert({
-          order_id: order.id,
-          client_id: user.id,
-          title: `${orderRef} — ${draft.objective.goal || "Creative Production Scope"}`,
-          status: "awaiting_brief",
-          revisions_used: 0,
-          max_revisions: 3,
+    if (!paymentInit.success) {
+      // Transition order status to failed initiation
+      await supabase
+        .from("orders")
+        .update({
+          payment_status: "failed",
+          updated_at: new Date().toISOString(),
         })
-        .select()
-        .single();
-
-      if (project) {
-        // Create initial project brief record
-        await supabase.from("project_briefs").insert({
-          project_id: project.id,
-          brand_name: "",
-          objective: draft.objective.goal || "",
-          audience: "",
-          platforms: "",
-          submitted: false,
-        });
-
-        // Create initial tasks
-        const defaultTasks = [
-          { title: "Client Creative Brief Submission", status: "todo" as const, display_order: 1 },
-          { title: "Production Kickoff & Creative Direction", status: "todo" as const, display_order: 2 },
-          { title: "Draft Deliverable Delivery & Review", status: "todo" as const, display_order: 3 },
-          { title: "Final Asset Handover & Archiving", status: "todo" as const, display_order: 4 },
-        ];
-
-        for (const t of defaultTasks) {
-          await supabase.from("project_tasks").insert({
-            project_id: project.id,
-            title: t.title,
-            status: t.status,
-            display_order: t.display_order,
-          });
-        }
-      }
-
-      // Log audit event
-      await supabase.from("audit_logs").insert({
-        event_type: "ORDER_CREATED",
-        details: `Order ${orderRef} verified via ${gateway} (Tx: ${paymentInit.transactionRef || txId})`,
-        actor_id: user.id,
-      });
+        .eq("id", order.id);
 
       return {
-        ok: true,
-        orderRef,
-        orderId: order.id,
-        projectId: project?.id,
-        txId: paymentInit.transactionRef || txId,
-        redirectUrl: paymentInit.redirectUrl,
+        ok: false,
+        error:
+          paymentInit.error || "Payment gateway session initiation failed",
       };
     }
 
+    // CRITICAL FIX: Insert unverified payment record (verified: false)
+    await supabase.from("payments").insert({
+      order_id: order.id,
+      gateway: resolvedGateway,
+      transaction_ref: paymentInit.transactionRef || order.order_ref,
+      amount: order.amount,
+      currency: order.currency,
+      channel:
+        resolvedGateway === "sslcommerz"
+          ? "bKash / Card"
+          : resolvedGateway === "stripe"
+          ? "Card"
+          : "Dev Sandbox",
+      verified: false,
+      verified_at: null,
+      payload: {
+        status: "initiated",
+        redirectUrl: paymentInit.redirectUrl,
+        mode: paymentInit.mode,
+        initiated_at: new Date().toISOString(),
+      } as unknown as Json,
+    });
+
+    // Log audit event
+    await supabase.from("audit_logs").insert({
+      event_type: "ORDER_CREATED",
+      details: `Order ${order.order_ref} created awaiting payment verification via ${resolvedGateway} (Tx: ${paymentInit.transactionRef})`,
+      actor_id: user.id,
+    });
+
     return {
       ok: true,
-      orderRef,
-      orderId: effectiveOrderId,
-      txId: paymentInit.transactionRef || txId,
+      orderRef: order.order_ref,
+      orderId: order.id,
+      txId: paymentInit.transactionRef,
       redirectUrl: paymentInit.redirectUrl,
-      notice: "Order verified and launched in session scope.",
     };
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Failed to launch order";
+    const message =
+      err instanceof Error ? err.message : "Failed to launch order checkout";
     return { ok: false, error: message };
   }
 }

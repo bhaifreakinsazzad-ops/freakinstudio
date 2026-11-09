@@ -1,13 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, beforeEach } from "vitest";
 import {
   initiatePayment,
   verifyPayment,
   resolveGateway,
   SSLCommerzAdapter,
   StripeAdapter,
+  DevTestPaymentAdapter,
 } from "@/lib/payments";
 
-describe("Payment Gateway Subsystem — SSLCOMMERZ & Stripe", () => {
+describe("Payment Gateway Subsystem — Real Adapters & DevTest Isolation", () => {
   describe("1. Gateway Resolver", () => {
     it("resolves SSLCOMMERZ as default for BDT currency", () => {
       expect(resolveGateway(undefined, "BDT")).toBe("sslcommerz");
@@ -23,10 +24,10 @@ describe("Payment Gateway Subsystem — SSLCOMMERZ & Stripe", () => {
     });
   });
 
-  describe("2. SSLCOMMERZ Adapter & Simulation", () => {
+  describe("2. SSLCOMMERZ Adapter (Strict Production Behavior)", () => {
     const sslc = new SSLCommerzAdapter();
 
-    it("initiates session in safe simulation mode when credentials not in env", async () => {
+    it("fails closed when credentials are not configured in environment (Directive 10.0 Defect C)", async () => {
       const res = await sslc.initiateSession({
         orderId: "ord-test-1",
         orderRef: "FS-ORD-1001",
@@ -41,82 +42,33 @@ describe("Payment Gateway Subsystem — SSLCOMMERZ & Stripe", () => {
         ipnUrl: "https://freakinstudio.com/api/payments/sslcommerz/callback",
       });
 
-      expect(res.success).toBe(true);
+      expect(res.success).toBe(false);
       expect(res.gateway).toBe("sslcommerz");
-      expect(res.transactionRef).toContain("SSLC-TX-");
-      expect(res.redirectUrl).toBeDefined();
-      expect(res.redirectUrl).toContain("simulated=true");
+      expect(res.error).toContain("SSLCOMMERZ merchant credentials");
     });
 
-    it("validates successful payment when amount and currency match exactly", async () => {
+    it("rejects validation when val_id is missing or credentials unconfigured", async () => {
       const val = await sslc.validatePayment({
         gateway: "sslcommerz",
         transactionRef: "SSLC-TX-9999",
         expectedAmount: 12500,
         expectedCurrency: "BDT",
         gatewayPayload: {
-          simulated: "true",
           amount: 12500,
           currency: "BDT",
-          val_id: "SIM_VAL_123",
-          status: "VALID",
-        },
-      });
-
-      expect(val.verified).toBe(true);
-      expect(val.status).toBe("paid");
-      expect(val.amountVerified).toBe(12500);
-      expect(val.currencyVerified).toBe("BDT");
-      expect(val.riskStatus).toBe("safe");
-    });
-
-    it("rejects validation when amount does not match expected order total", async () => {
-      const val = await sslc.validatePayment({
-        gateway: "sslcommerz",
-        transactionRef: "SSLC-TX-9999",
-        expectedAmount: 25000,
-        expectedCurrency: "BDT",
-        gatewayPayload: {
-          simulated: "true",
-          amount: 500, // Tampered amount
-          currency: "BDT",
-          val_id: "SIM_VAL_123",
           status: "VALID",
         },
       });
 
       expect(val.verified).toBe(false);
       expect(val.status).toBe("failed");
-      expect(val.error).toContain("Amount mismatch");
-      expect(val.riskStatus).toBe("flagged");
-    });
-
-    it("rejects validation when currency differs from order currency", async () => {
-      const val = await sslc.validatePayment({
-        gateway: "sslcommerz",
-        transactionRef: "SSLC-TX-9999",
-        expectedAmount: 1000,
-        expectedCurrency: "BDT",
-        gatewayPayload: {
-          simulated: "true",
-          amount: 1000,
-          currency: "USD", // Tampered currency
-          val_id: "SIM_VAL_123",
-          status: "VALID",
-        },
-      });
-
-      expect(val.verified).toBe(false);
-      expect(val.status).toBe("failed");
-      expect(val.error).toContain("Currency mismatch");
-      expect(val.riskStatus).toBe("flagged");
     });
   });
 
-  describe("3. Stripe Adapter & Simulation", () => {
+  describe("3. Stripe Adapter (Strict Production Behavior)", () => {
     const stripe = new StripeAdapter();
 
-    it("initiates session in safe simulation mode when secret key not configured", async () => {
+    it("fails closed when secret key is not configured (Directive 10.0 Defect C)", async () => {
       const res = await stripe.initiateSession({
         orderId: "ord-test-stripe-1",
         orderRef: "FS-ORD-2001",
@@ -130,54 +82,107 @@ describe("Payment Gateway Subsystem — SSLCOMMERZ & Stripe", () => {
         ipnUrl: "https://freakinstudio.com/api/payments/stripe/callback",
       });
 
-      expect(res.success).toBe(true);
+      expect(res.success).toBe(false);
       expect(res.gateway).toBe("stripe");
-      expect(res.transactionRef).toContain("STRIPE-CS-");
-      expect(res.redirectUrl).toContain("simulated=true");
+      expect(res.error).toContain("Stripe secret key");
     });
 
-    it("validates successful Stripe session with matching amount & currency", async () => {
+    it("rejects validation when secret key unconfigured", async () => {
       const val = await stripe.validatePayment({
         gateway: "stripe",
         transactionRef: "STRIPE-CS-999",
         expectedAmount: 450,
         expectedCurrency: "USD",
         gatewayPayload: {
-          simulated: "true",
-          amount: 450,
-          currency: "USD",
-          status: "paid",
-        },
-      });
-
-      expect(val.verified).toBe(true);
-      expect(val.status).toBe("paid");
-      expect(val.amountVerified).toBe(450);
-      expect(val.currencyVerified).toBe("USD");
-      expect(val.riskStatus).toBe("safe");
-    });
-
-    it("rejects validation when Stripe payload amount differs", async () => {
-      const val = await stripe.validatePayment({
-        gateway: "stripe",
-        transactionRef: "STRIPE-CS-999",
-        expectedAmount: 450,
-        expectedCurrency: "USD",
-        gatewayPayload: {
-          simulated: "true",
-          amount: 45, // Decimal tamper
-          currency: "USD",
-          status: "paid",
+          session_id: "STRIPE-CS-999",
         },
       });
 
       expect(val.verified).toBe(false);
       expect(val.status).toBe("failed");
-      expect(val.error).toContain("Amount mismatch");
     });
   });
 
-  describe("4. Unified Payment Dispatcher", () => {
+  describe("4. Isolated Development Test Adapter (Directive 10.0 Defect C)", () => {
+    const devAdapter = new DevTestPaymentAdapter();
+
+    it("fails closed when ENABLE_DEV_PAYMENT_SIMULATION is not enabled", async () => {
+      delete process.env.ENABLE_DEV_PAYMENT_SIMULATION;
+      const res = await devAdapter.initiateSession({
+        orderId: "ord-dev-1",
+        orderRef: "FS-ORD-DEV-1",
+        amount: 5000,
+        currency: "BDT",
+        customerName: "Test Dev",
+        customerEmail: "dev@freakinstudio.com",
+        successUrl: "/callback",
+        failUrl: "/callback",
+        cancelUrl: "/callback",
+        ipnUrl: "/callback",
+      });
+
+      expect(res.success).toBe(false);
+      expect(res.error).toContain("disabled in production");
+    });
+
+    it("initiates simulated session when explicitly enabled in non-production", async () => {
+      process.env.ENABLE_DEV_PAYMENT_SIMULATION = "true";
+      const res = await devAdapter.initiateSession({
+        orderId: "ord-dev-2",
+        orderRef: "FS-ORD-DEV-2",
+        amount: 5000,
+        currency: "BDT",
+        customerName: "Test Dev",
+        customerEmail: "dev@freakinstudio.com",
+        successUrl: "/callback",
+        failUrl: "/callback",
+        cancelUrl: "/callback",
+        ipnUrl: "/callback",
+      });
+
+      expect(res.success).toBe(true);
+      expect(res.gateway).toBe("dev_test_adapter");
+      expect(res.mode).toBe("dev_test");
+      expect(res.redirectUrl).toContain("dev-test/callback");
+    });
+
+    it("validates payment successfully with authorized dev token", async () => {
+      process.env.ENABLE_DEV_PAYMENT_SIMULATION = "true";
+      const val = await devAdapter.validatePayment({
+        gateway: "dev_test_adapter",
+        transactionRef: "DEV-TX-1234",
+        expectedAmount: 5000,
+        expectedCurrency: "BDT",
+        gatewayPayload: {
+          dev_token: "dev_secret_auth",
+        },
+      });
+
+      expect(val.verified).toBe(true);
+      expect(val.status).toBe("paid");
+      expect(val.amountVerified).toBe(5000);
+      expect(val.currencyVerified).toBe("BDT");
+    });
+
+    it("rejects dev validation when token is missing or forged", async () => {
+      process.env.ENABLE_DEV_PAYMENT_SIMULATION = "true";
+      const val = await devAdapter.validatePayment({
+        gateway: "dev_test_adapter",
+        transactionRef: "DEV-TX-1234",
+        expectedAmount: 5000,
+        expectedCurrency: "BDT",
+        gatewayPayload: {
+          dev_token: "malicious_token",
+        },
+      });
+
+      expect(val.verified).toBe(false);
+      expect(val.status).toBe("failed");
+      expect(val.riskStatus).toBe("fraud");
+    });
+  });
+
+  describe("5. Unified Payment Dispatcher", () => {
     it("dispatches payment initiation to proper gateway", async () => {
       const bdtRes = await initiatePayment({
         orderId: "ord-bdt",
@@ -210,16 +215,15 @@ describe("Payment Gateway Subsystem — SSLCOMMERZ & Stripe", () => {
       expect(usdRes.gateway).toBe("stripe");
     });
 
-    it("dispatches verification to proper gateway validator", async () => {
+    it("dispatches verification to dev_test_adapter when requested and enabled", async () => {
+      process.env.ENABLE_DEV_PAYMENT_SIMULATION = "true";
       const val = await verifyPayment({
-        gateway: "sslcommerz",
+        gateway: "dev_test_adapter",
         transactionRef: "TX-TEST",
         expectedAmount: 5000,
         expectedCurrency: "BDT",
         gatewayPayload: {
-          simulated: "true",
-          amount: 5000,
-          currency: "BDT",
+          dev_token: "dev_secret_auth",
         },
       });
 

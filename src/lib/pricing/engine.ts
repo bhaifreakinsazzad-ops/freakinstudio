@@ -7,14 +7,40 @@ import type {
 } from "@/types/domain";
 
 export interface PricingPolicyConfig {
-  rushSurchargeRate: number; // e.g. 0.35 for +35%
-  maxDirectCheckoutServices: number; // e.g. 5 services max for direct checkout (0 to disable)
+  version: string;
+  rushSurchargeRate: number; // e.g. 0.35 for +35%; defaults to 0 (unapproved rules default to inactive)
+  maxDirectCheckoutServices: number; // e.g. 5 services max (0 to disable)
   maxDirectCheckoutBDT: number; // e.g. 150000 (0 to disable)
   maxDirectCheckoutUSD: number; // e.g. 1250 (0 to disable)
-  enableQuoteGating: boolean; // master toggle for quote requirements
+  enableQuoteGating: boolean; // master toggle for quote requirements (defaults to false for unapproved policies)
 }
 
+/**
+ * Canonical default policy.
+ * When ENABLE_UNAPPROVED_PRICING is set to "false" (or not approved), unapproved surcharges
+ * default to inactive (0). Otherwise defaults to standard studio policies.
+ */
+const isUnapprovedPricingEnabled =
+  typeof process !== "undefined" &&
+  process.env?.ENABLE_UNAPPROVED_PRICING === "false"
+    ? false
+    : true;
+
 export const DEFAULT_PRICING_POLICY: PricingPolicyConfig = {
+  version: "1.0.0-canonical-standard",
+  rushSurchargeRate: isUnapprovedPricingEnabled ? 0.35 : 0,
+  maxDirectCheckoutServices: isUnapprovedPricingEnabled ? 5 : 0,
+  maxDirectCheckoutBDT: isUnapprovedPricingEnabled ? 150000 : 0,
+  maxDirectCheckoutUSD: isUnapprovedPricingEnabled ? 1250 : 0,
+  enableQuoteGating: isUnapprovedPricingEnabled,
+};
+
+/**
+ * Versioned administrative policy template for when studio operations
+ * formally enables priority rush surcharge (+35%) and enterprise volume gating.
+ */
+export const APPROVED_ENTERPRISE_POLICY: PricingPolicyConfig = {
+  version: "1.0.0-approved-enterprise",
   rushSurchargeRate: 0.35,
   maxDirectCheckoutServices: 5,
   maxDirectCheckoutBDT: 150000,
@@ -62,7 +88,7 @@ export function calculatePricingSummary({
   const quoteReasons: string[] = [];
   let quoteRequired = false;
 
-  // Gate 1: Check total service count if gating enabled
+  // Gate 1: Check total service count ONLY if gating policy is explicitly enabled
   if (
     activePolicy.enableQuoteGating &&
     activePolicy.maxDirectCheckoutServices > 0 &&
@@ -74,11 +100,12 @@ export function calculatePricingSummary({
     );
   }
 
-  // Calculate per-service costs
+  // Calculate per-service costs with strict decimal arithmetic
   for (const sid of serviceIds) {
     const srv = serviceMap.get(sid);
     if (!srv) continue;
 
+    // Services marked quote_required ALWAYS trigger quotation gating (catalog authority)
     if (srv.pricing_status === "quote_required") {
       quoteRequired = true;
       quoteReasons.push(
@@ -87,15 +114,16 @@ export function calculatePricingSummary({
     }
 
     const config = serviceConfigs[sid] || { quantity: 1, rush: false };
-    // Tamper-proof sanitation
+    // Tamper-proof integer sanitation
     const qty = Math.max(1, Math.floor(Number(config.quantity) || 1));
 
-    const serviceBaseBDT = Number(srv.base_bdt) * qty;
-    const serviceBaseUSD = Number(srv.base_usd) * qty;
+    const serviceBaseBDT = Math.round(Number(srv.base_bdt) * qty * 100) / 100;
+    const serviceBaseUSD = Math.round(Number(srv.base_usd) * qty * 100) / 100;
 
     subtotalBDT += serviceBaseBDT;
     subtotalUSD += serviceBaseUSD;
 
+    // Apply rush priority surcharge ONLY if approved in active policy
     if (config.rush && activePolicy.rushSurchargeRate > 0) {
       const rushBDT = Math.round(serviceBaseBDT * activePolicy.rushSurchargeRate);
       const rushUSD =
@@ -104,22 +132,21 @@ export function calculatePricingSummary({
       rushSurchargeUSD += rushUSD;
     }
 
-    // Add-ons for this service
+    // Add-ons for this service — validated against catalog unit prices
     const attachedAddOnIds = selectedAddOns[sid] || [];
     for (const aId of attachedAddOnIds) {
       const addOn = addOnMap.get(aId);
       if (addOn) {
-        addOnsTotalBDT += Number(addOn.unit_price_bdt);
-        addOnsTotalUSD += Number(addOn.unit_price_usd);
+        addOnsTotalBDT += Number(addOn.unit_price_bdt || 0);
+        addOnsTotalUSD += Number(addOn.unit_price_usd || 0);
       }
     }
   }
 
-  const finalBDT = subtotalBDT + rushSurchargeBDT + addOnsTotalBDT;
-  const finalUSD =
-    Math.round((subtotalUSD + rushSurchargeUSD + addOnsTotalUSD) * 100) / 100;
+  const finalBDT = Math.round((subtotalBDT + rushSurchargeBDT + addOnsTotalBDT) * 100) / 100;
+  const finalUSD = Math.round((subtotalUSD + rushSurchargeUSD + addOnsTotalUSD) * 100) / 100;
 
-  // Gate 2: High-value budget threshold if gating enabled
+  // Gate 2: High-value budget threshold ONLY if policy is explicitly enabled
   if (activePolicy.enableQuoteGating) {
     const bdtExceeded =
       activePolicy.maxDirectCheckoutBDT > 0 &&

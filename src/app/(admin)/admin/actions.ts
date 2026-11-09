@@ -2,21 +2,48 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { isAdminRole } from "@/lib/permissions/roles";
 import type { PricingStatus } from "@/types/domain";
+
+async function verifyAdminAuth() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { authorized: false, error: "Unauthorized: Sign in required", user: null, supabase };
+  }
+
+  const { data: profile, error: profErr } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  if (profErr || !profile || !isAdminRole(profile.role)) {
+    return {
+      authorized: false,
+      error: "Forbidden: Administrative access required",
+      user: null,
+      supabase,
+    };
+  }
+
+  return { authorized: true, error: null, user, supabase };
+}
 
 export async function updateProjectStatusAction(
   projectId: string,
   newStatus: string
 ) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const auth = await verifyAdminAuth();
+    if (!auth.authorized || !auth.user) {
+      return { ok: false, error: auth.error || "Forbidden" };
+    }
 
-    if (!user) return { ok: false, error: "Unauthorized" };
-
-    const { error } = await supabase
+    const { error } = await auth.supabase
       .from("projects")
       .update({
         status: newStatus,
@@ -25,13 +52,13 @@ export async function updateProjectStatusAction(
       .eq("id", projectId);
 
     if (error) {
-      console.warn("Project status update error:", error.message);
+      return { ok: false, error: `Failed to update project status: ${error.message}` };
     }
 
-    await supabase.from("audit_logs").insert({
+    await auth.supabase.from("audit_logs").insert({
       event_type: "ADMIN_PROJECT_STATUS_CHANGE",
       details: `Admin changed project ${projectId} status to ${newStatus}`,
-      actor_id: user.id,
+      actor_id: auth.user.id,
     });
 
     revalidatePath("/admin");
@@ -51,26 +78,32 @@ export async function updateServicePricingAction(
   }
 ) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const auth = await verifyAdminAuth();
+    if (!auth.authorized || !auth.user) {
+      return { ok: false, error: auth.error || "Forbidden" };
+    }
 
-    if (!user) return { ok: false, error: "Unauthorized" };
+    // Validate positive numbers if provided
+    if (updates.base_bdt !== undefined && updates.base_bdt <= 0) {
+      return { ok: false, error: "base_bdt must be a positive number" };
+    }
+    if (updates.base_usd !== undefined && updates.base_usd <= 0) {
+      return { ok: false, error: "base_usd must be a positive number" };
+    }
 
-    const { error } = await supabase
+    const { error } = await auth.supabase
       .from("services")
       .update(updates)
       .eq("id", serviceId);
 
     if (error) {
-      console.warn("Service pricing update notice:", error.message);
+      return { ok: false, error: `Failed to update service pricing: ${error.message}` };
     }
 
-    await supabase.from("audit_logs").insert({
+    await auth.supabase.from("audit_logs").insert({
       event_type: "ADMIN_SERVICE_PRICING_UPDATED",
       details: `Admin updated pricing parameters for service ${serviceId}`,
-      actor_id: user.id,
+      actor_id: auth.user.id,
     });
 
     revalidatePath("/admin");
@@ -90,14 +123,16 @@ export async function issueQuoteAction(
   adminNotes?: string
 ) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const auth = await verifyAdminAuth();
+    if (!auth.authorized || !auth.user) {
+      return { ok: false, error: auth.error || "Forbidden" };
+    }
 
-    if (!user) return { ok: false, error: "Unauthorized" };
+    if (approvedAmountBdt <= 0 || approvedAmountUsd <= 0) {
+      return { ok: false, error: "Approved quotation amounts must be greater than zero" };
+    }
 
-    const { error } = await supabase
+    const { error } = await auth.supabase
       .from("quotes")
       .update({
         status: "issued",
@@ -110,13 +145,13 @@ export async function issueQuoteAction(
       .eq("id", quoteId);
 
     if (error) {
-      console.warn("Quote issue notice:", error.message);
+      return { ok: false, error: `Failed to issue quotation: ${error.message}` };
     }
 
-    await supabase.from("audit_logs").insert({
+    await auth.supabase.from("audit_logs").insert({
       event_type: "QUOTE_ISSUED",
       details: `Admin issued approved quotation ${quoteId} (৳ ${approvedAmountBdt} / $ ${approvedAmountUsd})`,
-      actor_id: user.id,
+      actor_id: auth.user.id,
     });
 
     revalidatePath("/admin");
@@ -124,28 +159,6 @@ export async function issueQuoteAction(
     return { ok: true };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Quote issuance failed";
-    return { ok: false, error: msg };
-  }
-}
-
-export async function promoteSelfToAdminAction() {
-  try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) return { ok: false, error: "Unauthorized" };
-
-    await supabase
-      .from("profiles")
-      .update({ role: "studio_admin" })
-      .eq("id", user.id);
-
-    revalidatePath("/admin");
-    return { ok: true };
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Promotion failed";
     return { ok: false, error: msg };
   }
 }

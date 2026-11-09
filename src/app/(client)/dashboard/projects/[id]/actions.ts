@@ -2,6 +2,49 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { isAdminRole } from "@/lib/permissions/roles";
+
+async function verifyProjectAccess(projectId: string, requireOwnerOnly = false) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { authorized: false, error: "Authentication required", user: null, project: null, supabase };
+  }
+
+  const { data: project, error: prjErr } = await supabase
+    .from("projects")
+    .select("id, client_id, status, revisions_used, max_revisions, title, order_id")
+    .eq("id", projectId)
+    .single();
+
+  if (prjErr || !project) {
+    return { authorized: false, error: "Project not found", user, project: null, supabase };
+  }
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  const isAdmin = profile ? isAdminRole(profile.role) : false;
+  const isOwner = project.client_id === user.id;
+
+  if (requireOwnerOnly) {
+    if (!isOwner && !isAdmin) {
+      return { authorized: false, error: "Forbidden: Only the project owner can perform this action", user, project, supabase };
+    }
+  } else {
+    if (!isOwner && !isAdmin) {
+      return { authorized: false, error: "Forbidden: Access denied to project workspace", user, project, supabase };
+    }
+  }
+
+  return { authorized: true, error: null, user, project, supabase, isOwner, isAdmin };
+}
 
 export async function submitBriefAction(
   projectId: string,
@@ -13,23 +56,23 @@ export async function submitBriefAction(
   }
 ) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const access = await verifyProjectAccess(projectId, true);
+    if (!access.authorized || !access.user || !access.project) {
+      return { ok: false, error: access.error || "Forbidden" };
+    }
 
-    if (!user) {
-      return { ok: false, error: "Authentication required" };
+    if (!formData.brandName.trim() || !formData.objective.trim()) {
+      return { ok: false, error: "Brand name and project objective are required fields." };
     }
 
     // Upsert project brief
-    const { error: briefErr } = await supabase.from("project_briefs").upsert(
+    const { error: briefErr } = await access.supabase.from("project_briefs").upsert(
       {
         project_id: projectId,
-        brand_name: formData.brandName,
-        objective: formData.objective,
-        audience: formData.audience,
-        platforms: formData.platforms,
+        brand_name: formData.brandName.trim(),
+        objective: formData.objective.trim(),
+        audience: formData.audience.trim(),
+        platforms: formData.platforms.trim(),
         submitted: true,
         submitted_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -38,11 +81,11 @@ export async function submitBriefAction(
     );
 
     if (briefErr) {
-      console.warn("Brief upsert error:", briefErr.message);
+      return { ok: false, error: `Failed to save creative brief: ${briefErr.message}` };
     }
 
-    // Advance project status
-    await supabase
+    // Advance project status to brief_submitted
+    const { error: updateErr } = await access.supabase
       .from("projects")
       .update({
         status: "brief_submitted",
@@ -50,17 +93,21 @@ export async function submitBriefAction(
       })
       .eq("id", projectId);
 
-    // Complete the brief task if present
-    await supabase
+    if (updateErr) {
+      return { ok: false, error: `Failed to update project status: ${updateErr.message}` };
+    }
+
+    // Mark onboarding brief task as done
+    await access.supabase
       .from("project_tasks")
       .update({ status: "done" })
       .eq("project_id", projectId)
       .ilike("title", "%brief%");
 
-    await supabase.from("audit_logs").insert({
+    await access.supabase.from("audit_logs").insert({
       event_type: "BRIEF_SUBMITTED",
       details: `Client submitted creative onboarding brief for project ${projectId}`,
-      actor_id: user.id,
+      actor_id: access.user.id,
     });
 
     revalidatePath(`/dashboard/projects/${projectId}`);
@@ -81,38 +128,40 @@ export async function addPinAnnotationAction(
   }
 ) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return { ok: false, error: "Authentication required" };
+    const access = await verifyProjectAccess(projectId, false);
+    if (!access.authorized || !access.user) {
+      return { ok: false, error: access.error || "Forbidden" };
     }
 
-    const { data: annotation, error } = await supabase
+    if (!data.feedbackText.trim()) {
+      return { ok: false, error: "Annotation feedback text cannot be empty." };
+    }
+
+    // Verify asset belongs to project
+    const { data: asset, error: assetErr } = await access.supabase
+      .from("project_assets")
+      .select("id, project_id")
+      .eq("id", assetId)
+      .single();
+
+    if (assetErr || !asset || asset.project_id !== projectId) {
+      return { ok: false, error: "Target creative asset does not exist on this project." };
+    }
+
+    const { data: annotation, error } = await access.supabase
       .from("asset_annotations")
       .insert({
         asset_id: assetId,
         coord_x_percent: Math.min(100, Math.max(0, Math.round(data.coordX))),
         coord_y_percent: Math.min(100, Math.max(0, Math.round(data.coordY))),
-        feedback_text: data.feedbackText,
-        created_by: user.id,
+        feedback_text: data.feedbackText.trim(),
+        created_by: access.user.id,
       })
       .select()
       .single();
 
-    if (error) {
-      return {
-        ok: true,
-        annotation: {
-          id: `pin-demo-${Date.now()}`,
-          coord_x_percent: data.coordX,
-          coord_y_percent: data.coordY,
-          feedback_text: data.feedbackText,
-          resolved: false,
-        },
-      };
+    if (error || !annotation) {
+      return { ok: false, error: error?.message || "Failed to save annotation to database." };
     }
 
     revalidatePath(`/dashboard/projects/${projectId}`);
@@ -128,24 +177,17 @@ export async function requestRevisionAction(
   instructions: string
 ) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return { ok: false, error: "Authentication required" };
+    const access = await verifyProjectAccess(projectId, true);
+    if (!access.authorized || !access.user || !access.project) {
+      return { ok: false, error: access.error || "Forbidden" };
     }
 
-    // Check project quota
-    const { data: project } = await supabase
-      .from("projects")
-      .select("revisions_used, max_revisions")
-      .eq("id", projectId)
-      .single();
+    if (!instructions.trim()) {
+      return { ok: false, error: "Revision instructions cannot be empty." };
+    }
 
-    const used = project?.revisions_used ?? 0;
-    const max = project?.max_revisions ?? 3;
+    const used = access.project.revisions_used ?? 0;
+    const max = access.project.max_revisions ?? 3;
 
     if (used >= max) {
       return {
@@ -156,7 +198,7 @@ export async function requestRevisionAction(
 
     const newUsed = used + 1;
 
-    await supabase
+    const { error: prjUpdateErr } = await access.supabase
       .from("projects")
       .update({
         status: "revision_requested",
@@ -165,8 +207,12 @@ export async function requestRevisionAction(
       })
       .eq("id", projectId);
 
+    if (prjUpdateErr) {
+      return { ok: false, error: `Failed to update revision counter: ${prjUpdateErr.message}` };
+    }
+
     // Insert revision task
-    await supabase.from("project_tasks").insert({
+    const { error: taskErr } = await access.supabase.from("project_tasks").insert({
       project_id: projectId,
       title: `Revision Round #${newUsed}: ${instructions.slice(0, 50)}...`,
       description: instructions,
@@ -174,10 +220,14 @@ export async function requestRevisionAction(
       display_order: 10 + newUsed,
     });
 
-    await supabase.from("audit_logs").insert({
+    if (taskErr) {
+      console.warn("Task creation notice:", taskErr.message);
+    }
+
+    await access.supabase.from("audit_logs").insert({
       event_type: "REVISION_REQUESTED",
       details: `Client lodged revision round ${newUsed}/${max} for project ${projectId}`,
-      actor_id: user.id,
+      actor_id: access.user.id,
     });
 
     revalidatePath(`/dashboard/projects/${projectId}`);
@@ -193,16 +243,13 @@ export async function approveProjectAction(
   notes?: string
 ) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return { ok: false, error: "Authentication required" };
+    const access = await verifyProjectAccess(projectId, true);
+    if (!access.authorized || !access.user || !access.project) {
+      return { ok: false, error: access.error || "Forbidden" };
     }
 
-    await supabase
+    // Update project status to client_approved
+    const { error: prjErr } = await access.supabase
       .from("projects")
       .update({
         status: "client_approved",
@@ -210,17 +257,25 @@ export async function approveProjectAction(
       })
       .eq("id", projectId);
 
-    await supabase.from("approvals").insert({
+    if (prjErr) {
+      return { ok: false, error: `Failed to register project approval: ${prjErr.message}` };
+    }
+
+    const { error: appErr } = await access.supabase.from("approvals").insert({
       project_id: projectId,
-      approved_by: user.id,
+      approved_by: access.user.id,
       legal_terms_accepted: true,
       notes: notes || "Approved via Client Portal Creative Review Canvas",
     });
 
-    await supabase.from("audit_logs").insert({
+    if (appErr) {
+      return { ok: false, error: `Failed to insert approval record: ${appErr.message}` };
+    }
+
+    await access.supabase.from("audit_logs").insert({
       event_type: "PROJECT_APPROVED",
       details: `Client signed off and approved final deliverables for project ${projectId}`,
-      actor_id: user.id,
+      actor_id: access.user.id,
     });
 
     revalidatePath(`/dashboard/projects/${projectId}`);
