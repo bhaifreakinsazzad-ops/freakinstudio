@@ -7,30 +7,22 @@ import React from 'react';
  */
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   /** Visual variant – allow any string to stay compatible with existing code */
-  variant?: string;
+  variant?: string | 'primary';
   /** Size token (e.g., "sm", "md", "lg") – optional */
   size?: string;
   /** Optional render prop for custom content */
   render?: React.ReactNode;
   /** Optional className to extend/customize the button */
   className?: string;
-  children: React.ReactNode;
-  /**
-   * Visual variant – currently only "primary" is supported.
-   * Future variants (secondary, danger, etc.) can be added.
-   */
-  variant?: 'primary';
-  /**
-   * Optional className to extend/customize the button.
-   */
-  className?: string;
-  children: React.ReactNode;
+  /** Button content – either children or render prop must be provided */
+  children?: React.ReactNode;
 }
 
 export const Button: React.FC<ButtonProps> = ({
   variant = 'primary',
   className = '',
   children,
+  render,
   ...rest
 }) => {
   // Tailwind classes map to the designTokens defined in tailwind.config.ts.
@@ -41,9 +33,10 @@ export const Button: React.FC<ButtonProps> = ({
     primary: 'bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary/80',
   }[variant];
 
-  const spacingClasses = 'px-md py-sm'; // uses spacing-md and spacing-sm from tokens
-  const radiusClasses = 'rounded-md'; // uses radius-md token
-  const shadowClasses = 'shadow-sm'; // uses shadow-sm token
+  const spacingClasses = 'px-4 py-2'; // using Tailwind default spacing
+  const radiusClasses = 'rounded-md'; // will use @theme radius-md
+  const shadowClasses = 'shadow-sm'; // uses @theme shadow-sm
+
 
   const classes = `${baseClasses} ${variantClasses} ${spacingClasses} ${radiusClasses} ${shadowClasses} ${className}`
     .trim()
@@ -51,7 +44,7 @@ export const Button: React.FC<ButtonProps> = ({
 
   return (
     <button className={classes} {...rest}>
-      {children}
+      {render ?? children}
     </button>
   );
 };
