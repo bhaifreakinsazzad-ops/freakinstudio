@@ -113,6 +113,7 @@ export default function MarketingHomePage() {
             <h1 className="max-w-5xl text-5xl sm:text-8xl font-bold tracking-wide text-brand-light leading-tight">
               Where High‑Velocity Creativity Meets <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-highlight via-brand-light to-brand-highlight">Operating Precision.</span>
             </h1>
+            <h2 className="text-2xl sm:text-4xl font-bold text-brand-light mt-4">DESIGN. CREATE. PRODUCE. GROW.</h2>
             <p className="max-w-3xl text-base sm:text-xl text-brand-muted leading-relaxed">
               Freakin&apos;s Studio engineers bespoke brand architectures, 3D kinetic visuals, high‑performance digital platforms, and commercial creative assets for ambitious global enterprises.
             </p>
