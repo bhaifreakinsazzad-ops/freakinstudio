@@ -1,44 +1,48 @@
+"use client";
 import React from 'react';
 
 /**
  * Button component styled with Obsidian Atelier design tokens via Tailwind.
- *
- * Props are intentionally simple – you can extend as needed.
+ * Supports multiple visual variants.
  */
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  /** Visual variant – allow any string to stay compatible with existing code */
-  variant?: string | 'primary';
-  /** Size token (e.g., "sm", "md", "lg") – optional */
-  size?: string;
+  /** Visual variant */
+  variant?: 'primary' | 'outline' | 'ghost' | 'cyberGlow' | string;
+  /** Size token (e.g., "sm", "md", "lg") */
+  size?: 'sm' | 'md' | 'lg';
   /** Optional render prop for custom content */
   render?: React.ReactNode;
-  /** Optional className to extend/customize the button */
+  /** Additional class names */
   className?: string;
-  /** Button content – either children or render prop must be provided */
+  /** Children content */
   children?: React.ReactNode;
 }
 
 export const Button: React.FC<ButtonProps> = ({
   variant = 'primary',
+  size = 'md',
   className = '',
   children,
   render,
   ...rest
 }) => {
-  // Tailwind classes map to the designTokens defined in tailwind.config.ts.
   const baseClasses =
     'inline-flex items-center justify-center font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2';
 
-  const variantClasses = {
+  const sizeMap: Record<string, string> = {
+    sm: 'px-3 py-1.5 text-sm',
+    md: 'px-4 py-2',
+    lg: 'px-6 py-3 text-lg',
+  };
+
+  const variantMap: Record<string, string> = {
     primary: 'bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary/80',
-  }[variant];
+    outline: 'border border-primary text-primary bg-transparent hover:bg-primary/10',
+    ghost: 'bg-transparent text-primary hover:bg-primary/5',
+    cyberGlow: 'bg-primary/10 text-primary shadow-[0_0_8px_rgba(255,255,255,0.2)] hover:bg-primary/20',
+  };
 
-  const spacingClasses = 'px-4 py-2'; // using Tailwind default spacing
-  const radiusClasses = 'rounded-md'; // will use @theme radius-md
-  const shadowClasses = 'shadow-sm'; // uses @theme shadow-sm
-
-
-  const classes = `${baseClasses} ${variantClasses} ${spacingClasses} ${radiusClasses} ${shadowClasses} ${className}`
+  const classes = `${baseClasses} ${sizeMap[size] || ''} ${variantMap[variant] || ''} ${className}`
     .trim()
     .replace(/\s+/g, ' ');
 

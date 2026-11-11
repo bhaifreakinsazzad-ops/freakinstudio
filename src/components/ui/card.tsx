@@ -1,102 +1,59 @@
-import * as React from "react"
-import { cn } from "cn"
+"use client";
+import * as React from "react";
+import { cn } from "cn";
 
-function Card({
-  className,
-  size = "default",
-  ...props
-}: React.ComponentProps<"div"> & { size?: "default" | "sm" }) {
-  return (
-    <div
-      data-slot="card"
-      data-size={size}
-      className={cn(
-        "group/card flex flex-col gap-(--card-spacing) overflow-hidden rounded-xl bg-card py-(--card-spacing) text-sm text-card-foreground ring-1 ring-foreground/10 [--card-spacing:--spacing(4)] has-data-[slot=card-footer]:pb-0 has-[>img:first-child]:pt-0 data-[size=sm]:[--card-spacing:--spacing(3)] data-[size=sm]:has-data-[slot=card-footer]:pb-0 *:[img:first-child]:rounded-t-xl *:[img:last-child]:rounded-b-xl",
-        className
-      )}
-      {...props}
-    />
-  )
+/**
+ * Card component styled with Obsidian Atelier design tokens.
+ * Supports two size variants: "default" and "sm".
+ */
+interface CardProps extends React.ComponentProps<"div"> {
+  /** Size variant */
+  size?: "default" | "sm";
+  /** Additional className */
+  className?: string;
 }
 
-function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="card-header"
-      className={cn(
-        "group/card-header @container/card-header grid auto-rows-min items-start gap-1 rounded-t-xl px-(--card-spacing) has-data-[slot=card-action]:grid-cols-[1fr_auto] has-data-[slot=card-description]:grid-rows-[auto_auto] [.border-b]:pb-(--card-spacing)",
-        className
-      )}
-      {...props}
-    />
-  )
-}
+export const Card: React.FC<CardProps> = ({ size = "default", className = "", ...props }) => {
+  const baseClasses =
+    "group/card flex flex-col overflow-hidden rounded-xl bg-brand-surface/40 text-brand-muted border border-brand-border ring-1 ring-brand-border";
 
-function CardTitle({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="card-title"
-      className={cn(
-        "font-heading text-base leading-snug font-medium group-data-[size=sm]/card:text-sm",
-        className
-      )}
-      {...props}
-    />
-  )
-}
+  const spacing = size === "sm" ? "p-4" : "p-6";
 
-function CardDescription({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="card-description"
-      className={cn("text-sm text-muted-foreground", className)}
-      {...props}
-    />
-  )
-}
+  const classes = cn(baseClasses, spacing, className);
 
-function CardAction({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="card-action"
-      className={cn(
-        "col-start-2 row-span-2 row-start-1 self-start justify-self-end",
-        className
-      )}
-      {...props}
-    />
-  )
-}
+  return <div data-slot="card" data-size={size} className={classes} {...props} />;
+};
 
-function CardContent({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="card-content"
-      className={cn("px-(--card-spacing)", className)}
-      {...props}
-    />
-  )
-}
+/** CardHeader */
+export const CardHeader: React.FC<React.ComponentProps<"div">> = ({ className = "", ...props }) => (
+  <div data-slot="card-header" className={cn("px-4 pt-4", className)} {...props} />
+);
 
-function CardFooter({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="card-footer"
-      className={cn(
-        "flex items-center rounded-b-xl border-t bg-muted/50 p-(--card-spacing)",
-        className
-      )}
-      {...props}
-    />
-  )
-}
+/** CardTitle */
+export const CardTitle: React.FC<React.ComponentProps<"div">> = ({ className = "", ...props }) => (
+  <div data-slot="card-title" className={cn("font-heading text-base font-medium text-brand-light", className)} {...props} />
+);
 
-export {
-  Card,
-  CardHeader,
-  CardFooter,
-  CardTitle,
-  CardAction,
-  CardDescription,
-  CardContent,
-}
+/** CardDescription */
+export const CardDescription: React.FC<React.ComponentProps<"div">> = ({ className = "", ...props }) => (
+  <div data-slot="card-description" className={cn("text-sm text-brand-muted", className)} {...props} />
+);
+
+/** CardContent */
+export const CardContent: React.FC<React.ComponentProps<"div">> = ({ className = "", ...props }) => (
+  <div data-slot="card-content" className={cn("px-4 py-2", className)} {...props} />
+);
+
+/** CardAction */
+export const CardAction: React.FC<React.ComponentProps<"div">> = ({ className = "", ...props }) => (
+  <div data-slot="card-action" className={cn("self-end", className)} {...props} />
+);
+
+/** CardFooter */
+export const CardFooter: React.FC<React.ComponentProps<"div">> = ({ className = "", ...props }) => (
+  <div
+    data-slot="card-footer"
+    className={cn("flex items-center border-t bg-muted/50 p-4", className)}
+    {...props}
+  />
+);
