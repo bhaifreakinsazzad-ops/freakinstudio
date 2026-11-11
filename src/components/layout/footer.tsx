@@ -1,4 +1,6 @@
+"use client";
 import Link from "next/link";
+
 import { BrandLogo } from "../ui/BrandLogo";
 
 // Next 16's cacheComponents prerendering rejects new Date() at render time
