@@ -223,7 +223,7 @@ export function AdminConsoleClient({
                   status: "issued",
                   amount_bdt: quoteBdt,
                   amount_usd: quoteUsd,
-                  admin_notes: quoteNotes,
+                  notes: quoteNotes,
                 }
               : q
           )
@@ -320,10 +320,10 @@ export function AdminConsoleClient({
                         >
                           <div className="flex items-center justify-between">
                             <span className="text-[10px] font-bold text-brand-highlight">
-                              {p.id.slice(0, 8)}...
+                              {p.id.slice(0, 10)}
                             </span>
-                            <span className="text-[10px] text-brand-muted">
-                              Rev: {p.revisions_used}/{p.max_revisions}
+                            <span className="text-[10px] text-brand-muted tabular-nums">
+                              Rev: {p.revisions_used ?? p.current_round ?? 0}/{p.max_revisions ?? p.max_rounds ?? 3}
                             </span>
                           </div>
                           <h4 className="font-sans font-semibold text-brand-light text-xs line-clamp-2">
@@ -342,7 +342,7 @@ export function AdminConsoleClient({
                                     handleMoveProject(p.id, KANBAN_COLUMNS[curIdx + 1].id);
                                   }
                                 }}
-                                className="w-full py-1 text-[10px] font-mono bg-brand-surface hover:bg-brand-highlight hover:text-white rounded text-brand-muted border border-brand-border transition-colors"
+                                className="w-full py-1 text-[10px] font-mono bg-brand-surface hover:bg-brand-highlight hover:text-brand-black hover:font-semibold rounded text-brand-muted border border-brand-border transition-colors"
                               >
                                 Advance &rarr;
                               </button>
@@ -460,7 +460,7 @@ export function AdminConsoleClient({
                             <Button
                               size="sm"
                               onClick={() => handleSaveServicePricing(s.id)}
-                              className="text-[10px] h-6 px-2 bg-brand-highlight text-white"
+                              className="text-[10px] h-6 px-2 bg-brand-highlight text-brand-black font-semibold"
                             >
                               Save
                             </Button>
@@ -519,7 +519,7 @@ export function AdminConsoleClient({
                 >
                   <div className="flex items-center justify-between">
                     <span className="badge-mono text-brand-highlight font-bold text-sm">
-                      {q.quote_ref}
+                      {q.quote_ref || q.id}
                     </span>
                     <Badge variant="outline" className="text-[10px] uppercase border-amber-500/40 text-amber-400">
                       {q.status}
@@ -529,21 +529,21 @@ export function AdminConsoleClient({
                   <div className="space-y-1">
                     <span className="text-[10px] text-brand-muted uppercase">Client / Request Scope:</span>
                     <p className="text-brand-light font-sans text-xs">
-                      {q.notes || "Standard 7-Step Package Builder configuration"}
+                      {q.notes || q.scope_summary || "Standard 7-Step Package Builder configuration"}
                     </p>
                   </div>
 
                   <div className="grid grid-cols-2 gap-3 pt-2 border-t border-brand-border/60">
                     <div>
                       <span className="text-[10px] text-brand-muted uppercase block">Amount (BDT):</span>
-                      <span className="font-bold text-brand-light text-sm">
-                        ৳ {Number(q.amount_bdt).toLocaleString()}
+                      <span className="font-bold text-brand-light text-sm tabular-nums">
+                        ৳ {Number(q.amount_bdt ?? q.total_amount ?? 0).toLocaleString()}
                       </span>
                     </div>
                     <div>
                       <span className="text-[10px] text-brand-muted uppercase block">Amount (USD):</span>
-                      <span className="font-bold text-brand-light text-sm">
-                        ${Number(q.amount_usd)}
+                      <span className="font-bold text-brand-light text-sm tabular-nums">
+                        ${Number(q.amount_usd ?? (q.currency === "USD" ? q.total_amount : 0) ?? 0).toLocaleString()}
                       </span>
                     </div>
                   </div>
@@ -586,7 +586,7 @@ export function AdminConsoleClient({
                               size="sm"
                               onClick={() => handleIssueQuote(q.id)}
                               disabled={isPending}
-                              className="cyber-glow bg-brand-highlight hover:bg-brand-highlight/90 text-white font-mono text-xs w-full"
+                              className="cyber-glow bg-brand-highlight hover:bg-brand-highlight/90 text-brand-black font-semibold font-mono text-xs w-full"
                             >
                               Issue Approved Quote
                             </Button>
@@ -605,12 +605,12 @@ export function AdminConsoleClient({
                           size="sm"
                           onClick={() => {
                             setSelectedQuoteId(q.id);
-                            setQuoteBdt(Number(q.amount_bdt));
-                            setQuoteUsd(Number(q.amount_usd));
+                            setQuoteBdt(Number(q.amount_bdt ?? q.total_amount ?? 0));
+                            setQuoteUsd(Number(q.amount_usd ?? (q.currency === "USD" ? q.total_amount : 0) ?? 0));
                           }}
-                          className="w-full cyber-glow bg-brand-highlight hover:bg-brand-highlight/90 text-white font-mono text-xs"
+                          className="w-full cyber-glow bg-brand-highlight hover:bg-brand-highlight/90 text-brand-black font-semibold font-mono text-xs"
                         >
-                          Review & Issue Quote
+                          Review &amp; Issue Quote
                         </Button>
                       )}
                     </div>
@@ -653,18 +653,24 @@ export function AdminConsoleClient({
                 ) : (
                   initialOrders.map((ord) => (
                     <tr key={ord.id} className="hover:bg-brand-surface/40">
-                      <td className="p-3.5 font-bold text-brand-highlight">{ord.order_ref}</td>
+                      <td className="p-3.5 font-bold text-brand-highlight">
+                        {ord.order_ref || ord.order_number || ord.id}
+                      </td>
                       <td className="p-3.5">
                         <Badge variant="outline" className="text-[10px] uppercase border-emerald-500/40 text-emerald-400 bg-emerald-500/10">
                           {ord.payment_status}
                         </Badge>
                       </td>
-                      <td className="p-3.5 uppercase text-brand-light">{ord.project_status}</td>
-                      <td className="p-3.5 text-brand-light font-bold">
-                        ৳ {Number(ord.amount_bdt).toLocaleString()}
+                      <td className="p-3.5 uppercase text-brand-light">
+                        {(ord.project_status || "in_production").replace(/_/g, " ")}
                       </td>
-                      <td className="p-3.5 text-brand-muted">${Number(ord.amount_usd)}</td>
-                      <td className="p-3.5 text-brand-muted">
+                      <td className="p-3.5 text-brand-light font-bold tabular-nums">
+                        ৳ {Number(ord.amount_bdt ?? ord.total_amount ?? 0).toLocaleString()}
+                      </td>
+                      <td className="p-3.5 text-brand-muted tabular-nums">
+                        ${Number(ord.amount_usd ?? (ord.currency === "USD" ? ord.total_amount : 0) ?? 0).toLocaleString()}
+                      </td>
+                      <td className="p-3.5 text-brand-muted tabular-nums">
                         {new Date(ord.created_at).toLocaleDateString()}
                       </td>
                     </tr>
@@ -692,7 +698,7 @@ export function AdminConsoleClient({
                   <th className="p-3.5">Timestamp</th>
                   <th className="p-3.5">Event Type</th>
                   <th className="p-3.5">Event Details</th>
-                  <th className="p-3.5">Actor ID</th>
+                  <th className="p-3.5">Actor</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-brand-border/60">
@@ -705,11 +711,11 @@ export function AdminConsoleClient({
                 ) : (
                   initialAuditLogs.map((log) => (
                     <tr key={log.id} className="hover:bg-brand-surface/40">
-                      <td className="p-3.5 text-brand-muted text-[11px] whitespace-nowrap">
+                      <td className="p-3.5 text-brand-muted text-[11px] whitespace-nowrap tabular-nums">
                         {new Date(log.created_at).toLocaleString()}
                       </td>
                       <td className="p-3.5 font-bold text-brand-highlight">
-                        {log.event_type}
+                        {log.event_type || log.action || "SYSTEM_EVENT"}
                       </td>
                       <td className="p-3.5 text-brand-light font-sans text-xs">
                         {typeof log.details === "object"
@@ -717,7 +723,7 @@ export function AdminConsoleClient({
                           : String(log.details || "")}
                       </td>
                       <td className="p-3.5 text-brand-muted text-[10px]">
-                        {log.actor_id ? `${log.actor_id.slice(0, 8)}...` : "SYSTEM"}
+                        {log.actor_email || (log.actor_id ? `${log.actor_id.slice(0, 8)}...` : "SYSTEM")}
                       </td>
                     </tr>
                   ))

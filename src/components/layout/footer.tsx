@@ -14,9 +14,11 @@ export function Footer() {
         <div className="grid grid-cols-2 md:grid-cols-5 gap-8 mb-12">
           {/* Brand Info */}
           <div className="col-span-2 space-y-4">
-            <Link href="/" className="font-mono text-base font-bold tracking-wider text-brand-light flex items-center gap-2"><BrandLogo className="inline-block" /></Link>
+            <Link href="/" className="inline-flex items-center">
+              <BrandLogo size={34} showWordmark />
+            </Link>
             <p className="text-xs text-brand-muted max-w-sm leading-relaxed">
-              Creative Commerce Operating System. High-velocity brand systems, 3D kinetic visuals, audio engineering, and full-stack digital platforms engineered for visionary commercial ventures.
+              Creative Commerce Operating System. High-velocity graphic design, brand systems, video &amp; 3D motion, paid ad creative, and corporate communication built for ambitious commercial ventures.
             </p>
           </div>
 

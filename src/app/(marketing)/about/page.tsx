@@ -93,9 +93,8 @@ export default function AboutPage() {
                 <span className="font-mono text-xs text-brand-highlight uppercase">Studio Footprint</span>
                 <h3 className="text-2xl font-bold text-brand-light">Dhaka Headquarters &bull; Worldwide Delivery</h3>
               </div>
-              <div className="flex items-center gap-2 font-mono text-xs text-brand-muted">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                <span>Production Desk Active</span>
+              <div className="font-mono text-xs text-emerald-400 font-semibold">
+                Production Desk Active
               </div>
             </div>
 

@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ShowcaseImage } from "@/components/ui/ShowcaseImage";
 import {
   submitBriefAction,
   addPinAnnotationAction,
@@ -93,6 +94,8 @@ export function ProjectWorkspaceClient({ project }: ProjectWorkspaceProps) {
     }));
   });
   const [isPinModeActive, setIsPinModeActive] = useState(false);
+  const [pendingPin, setPendingPin] = useState<{ x: number; y: number } | null>(null);
+  const [pinCommentInput, setPinCommentInput] = useState("");
   const canvasRef = useRef<HTMLDivElement>(null);
 
   // Revision State
@@ -124,27 +127,44 @@ export function ProjectWorkspaceClient({ project }: ProjectWorkspaceProps) {
     });
   };
 
-  // Handle Click on Proofing Canvas to Drop Pin
+  // Handle Click on Proofing Canvas to Position Pending Pin
   const handleCanvasClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!isPinModeActive || !canvasRef.current) return;
 
     const rect = canvasRef.current.getBoundingClientRect();
-    const x = Math.round(((e.clientX - rect.left) / rect.width) * 100);
-    const y = Math.round(((e.clientY - rect.top) / rect.height) * 100);
+    const x = Math.max(0, Math.min(100, Math.round(((e.clientX - rect.left) / rect.width) * 100)));
+    const y = Math.max(0, Math.min(100, Math.round(((e.clientY - rect.top) / rect.height) * 100)));
 
-    const comment = prompt("Enter specific design feedback for this coordinate:");
-    if (!comment || !comment.trim()) return;
+    setPendingPin({ x, y });
+    setPinCommentInput("");
+  };
+
+  // Submit Inline Pin Feedback
+  const handleSavePendingPin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!pendingPin || !pinCommentInput.trim()) {
+      toast.error("Enter feedback notes before saving this coordinate pin.");
+      return;
+    }
+
+    const { x, y } = pendingPin;
+    const feedbackText = pinCommentInput.trim();
 
     startTransition(async () => {
       const res = await addPinAnnotationAction(project.id, project.assets?.[0]?.id || "asset-master", {
         coordX: x,
         coordY: y,
-        feedbackText: comment.trim(),
+        feedbackText,
       });
 
       if (res.ok && res.annotation) {
         setPins((prev) => [...prev, res.annotation]);
+        setPendingPin(null);
+        setPinCommentInput("");
+        setIsPinModeActive(false);
         toast.success(`Feedback Pin #${pins.length + 1} added at (${x}%, ${y}%)`);
+      } else {
+        toast.error("Failed to save pin annotation.");
       }
     });
   };
@@ -230,7 +250,7 @@ export function ProjectWorkspaceClient({ project }: ProjectWorkspaceProps) {
                   </a>
                 }
                 size="sm"
-                className="cyber-glow bg-brand-success hover:bg-brand-success/90 text-white font-mono text-xs"
+                className="cyber-glow bg-brand-success hover:bg-brand-success/90 text-brand-black font-semibold font-mono text-xs"
               />
             )}
           </div>
@@ -283,7 +303,7 @@ export function ProjectWorkspaceClient({ project }: ProjectWorkspaceProps) {
                       <span
                         className={`w-4 h-4 rounded-full border flex items-center justify-center text-[10px] ${
                           task.done
-                            ? "bg-brand-success text-white border-brand-success font-bold"
+                            ? "bg-brand-success text-brand-black border-brand-success font-bold"
                             : "border-brand-border text-brand-muted"
                         }`}
                       >
@@ -325,7 +345,7 @@ export function ProjectWorkspaceClient({ project }: ProjectWorkspaceProps) {
               </div>
               <Button
                 onClick={() => setActiveTab("brief")}
-                className="w-full font-mono text-xs cyber-glow bg-brand-highlight hover:bg-brand-highlight/90 text-white mt-2"
+                className="w-full font-mono text-xs cyber-glow bg-brand-highlight hover:bg-brand-highlight/90 text-brand-black font-semibold mt-2"
               >
                 {isBriefSubmitted ? "Review Brief" : "Complete Creative Brief"}
               </Button>
@@ -413,7 +433,7 @@ export function ProjectWorkspaceClient({ project }: ProjectWorkspaceProps) {
                 <Button
                   type="submit"
                   disabled={isPending}
-                  className="cyber-glow bg-brand-highlight hover:bg-brand-highlight/90 text-white font-mono text-xs px-6 py-5"
+                  className="cyber-glow bg-brand-highlight hover:bg-brand-highlight/90 text-brand-black font-semibold font-mono text-xs px-6 py-5"
                 >
                   {isPending ? "Submitting..." : "Submit Creative Brief & Queue Production"}
                 </Button>
@@ -432,11 +452,18 @@ export function ProjectWorkspaceClient({ project }: ProjectWorkspaceProps) {
                 Interactive Canvas: {isPinModeActive ? "Click canvas to place feedback pin" : "Inspection Mode"}
               </span>
               <Button
-                variant={isPinModeActive ? "default" : "outline"}
+                variant={isPinModeActive ? "primary" : "outline"}
                 size="sm"
-                onClick={() => setIsPinModeActive(!isPinModeActive)}
+                onClick={() => {
+                  const next = !isPinModeActive;
+                  setIsPinModeActive(next);
+                  if (!next) {
+                    setPendingPin(null);
+                    setPinCommentInput("");
+                  }
+                }}
                 className={`font-mono text-xs ${
-                  isPinModeActive ? "bg-brand-highlight text-white cyber-glow" : "border-brand-border"
+                  isPinModeActive ? "bg-brand-highlight text-brand-black font-semibold cyber-glow" : "border-brand-border"
                 }`}
               >
                 {isPinModeActive ? "Cancel Pin Mode" : "+ Drop Feedback Pin"}
@@ -451,19 +478,27 @@ export function ProjectWorkspaceClient({ project }: ProjectWorkspaceProps) {
                 isPinModeActive ? "cursor-crosshair ring-2 ring-brand-highlight" : "cursor-default"
               }`}
             >
-              {/* Graphic Master Representation */}
-              <div className="text-center space-y-3 pointer-events-none p-6">
-                <div className="w-20 h-20 rounded-2xl bg-brand-card border border-brand-border flex items-center justify-center mx-auto cyber-glow">
-                  <span className="font-mono text-2xl font-black text-brand-highlight">FS</span>
-                </div>
-                <div>
-                  <h3 className="font-bold text-lg text-brand-light font-mono">
-                    {project.title}
-                  </h3>
-                  <p className="text-xs text-brand-muted font-mono mt-1">
-                    Master Draft Preview • Version 1.0
-                  </p>
-                </div>
+              {/* High-resolution Production Draft Visual */}
+              <ShowcaseImage
+                src={
+                  project.assets?.[0]?.storage_path &&
+                  project.assets[0].storage_path !== "mock" &&
+                  project.assets[0].storage_path.startsWith("/")
+                    ? project.assets[0].storage_path
+                    : "/images/portfolio/brand-identity.jpg"
+                }
+                alt={project.assets?.[0]?.file_name || project.title}
+                caption={project.title}
+                sizes="(max-width: 1024px) 100vw, 66vw"
+                className="w-full h-full object-cover"
+              />
+              <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent p-5">
+                <p className="font-mono text-xs font-bold text-brand-light">
+                  {project.assets?.[0]?.file_name || project.title}
+                </p>
+                <p className="font-mono text-[11px] text-brand-muted">
+                  Master Draft Preview &middot; {project.assets?.[0]?.version_label || "v1.0"}
+                </p>
               </div>
 
               {/* Rendered Pins */}
@@ -474,13 +509,69 @@ export function ProjectWorkspaceClient({ project }: ProjectWorkspaceProps) {
                     left: `${pin.coord_x_percent}%`,
                     top: `${pin.coord_y_percent}%`,
                   }}
-                  className="absolute -translate-x-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-brand-highlight text-white font-mono text-xs font-bold flex items-center justify-center shadow-lg cyber-glow ring-2 ring-white"
+                  className="absolute -translate-x-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-brand-highlight text-brand-black font-mono text-xs font-bold flex items-center justify-center shadow-lg cyber-glow ring-2 ring-brand-black"
                   title={pin.feedback_text}
                 >
                   {index + 1}
                 </div>
               ))}
+
+              {/* Pending Coordinate Crosshair Marker */}
+              {pendingPin && (
+                <div
+                  style={{
+                    left: `${pendingPin.x}%`,
+                    top: `${pendingPin.y}%`,
+                  }}
+                  className="absolute -translate-x-1/2 -translate-y-1/2 w-7 h-7 rounded-full border-2 border-brand-highlight bg-brand-black/80 text-brand-highlight font-mono text-xs font-bold flex items-center justify-center shadow-lg"
+                >
+                  +
+                </div>
+              )}
             </div>
+
+            {/* Inline Coordinate Feedback Composer (replaces native browser prompt) */}
+            {pendingPin && (
+              <form
+                onSubmit={handleSavePendingPin}
+                className="p-4 rounded-2xl border border-brand-highlight/50 bg-brand-surface space-y-3"
+              >
+                <div className="flex items-center justify-between text-xs font-mono">
+                  <span className="font-bold text-brand-highlight">
+                    New Pin at ({pendingPin.x}%, {pendingPin.y}%)
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPendingPin(null);
+                      setPinCommentInput("");
+                    }}
+                    className="text-brand-muted hover:text-brand-light"
+                  >
+                    Cancel
+                  </button>
+                </div>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <Input
+                    type="text"
+                    value={pinCommentInput}
+                    onChange={(e) => setPinCommentInput(e.target.value)}
+                    placeholder="Describe your exact adjustment at this coordinate..."
+                    className="bg-brand-black border-brand-border text-brand-light text-xs font-mono h-10 flex-1"
+                    autoFocus
+                    required
+                  />
+                  <Button
+                    type="submit"
+                    size="sm"
+                    disabled={isPending}
+                    className="bg-brand-highlight hover:bg-brand-highlight/90 text-brand-black font-semibold font-mono text-xs h-10 px-5"
+                  >
+                    {isPending ? "Saving..." : "Save Pin"}
+                  </Button>
+                </div>
+              </form>
+            )}
           </div>
 
           {/* Feedback Thread */}
@@ -564,7 +655,7 @@ export function ProjectWorkspaceClient({ project }: ProjectWorkspaceProps) {
               <Button
                 type="submit"
                 disabled={isPending}
-                className="cyber-glow bg-brand-highlight hover:bg-brand-highlight/90 text-white font-mono text-xs px-6 py-5"
+                className="cyber-glow bg-brand-highlight hover:bg-brand-highlight/90 text-brand-black font-semibold font-mono text-xs px-6 py-5"
               >
                 {isPending ? "Lodging Revision..." : `Submit Revision Round #${revisionsUsed + 1}`}
               </Button>
@@ -605,7 +696,7 @@ export function ProjectWorkspaceClient({ project }: ProjectWorkspaceProps) {
               <Button
                 onClick={handleApprove}
                 disabled={!isTermsAccepted || isPending}
-                className="w-full cyber-glow bg-brand-highlight hover:bg-brand-highlight/90 text-white font-mono text-xs py-5"
+                className="w-full cyber-glow bg-brand-highlight hover:bg-brand-highlight/90 text-brand-black font-semibold font-mono text-xs py-5"
               >
                 {isPending ? "Processing Sign-off..." : "Approve Deliverables & Unlock Master ZIP Archive"}
               </Button>
@@ -635,7 +726,7 @@ export function ProjectWorkspaceClient({ project }: ProjectWorkspaceProps) {
                       </a>
                     }
                     size="lg"
-                    className="cyber-glow bg-brand-success hover:bg-brand-success/90 text-white font-mono text-xs whitespace-nowrap"
+                    className="cyber-glow bg-brand-success hover:bg-brand-success/90 text-brand-black font-semibold font-mono text-xs whitespace-nowrap"
                   />
                 </div>
               </div>

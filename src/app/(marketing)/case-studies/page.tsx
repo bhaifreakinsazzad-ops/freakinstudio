@@ -1,14 +1,14 @@
-/* eslint-disable @next/next/no-img-element */
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Navbar } from "@/components/layout/navbar";
 import { Footer } from "@/components/layout/footer";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ShowcaseImage } from "@/components/ui/ShowcaseImage";
 
 export const metadata: Metadata = {
   title: "Case Studies — Freakin's Studio",
-  description: "In-depth technical and creative case studies detailing strategy, production milestones, and commercial results.",
+  description:
+    "In-depth creative and commercial case studies detailing strategy, production milestones, and measurable market outcomes.",
 };
 
 export const instant = false;
@@ -18,7 +18,7 @@ interface CaseStudy {
   client: string;
   industry: string;
   timeline: string;
-  servicesUsed: string[];
+  servicesUsed: { id: string; label: string }[];
   headline: string;
   summary: string;
   challenge: string;
@@ -30,74 +30,102 @@ interface CaseStudy {
     role: string;
   };
   imageUrl: string;
+  primaryServiceId: string;
 }
 
 const CASE_STUDIES: CaseStudy[] = [
   {
-    slug: "apex-robotics",
-    client: "Apex Autonomous Corp",
+    slug: "aurum-robotics",
+    client: "Aurum Robotics Corp",
     industry: "Industrial Robotics & Automation",
-    timeline: "3 Weeks (Rush Protocol)",
-    servicesUsed: ["A1. Enterprise Brand Identity System", "F1. 3D Kinetic Motion Reveal", "G1. Investor Presentation Master"],
-    headline: "Architecting a Series-A Industrial Identity for Autonomous Robotics",
-    summary: "How Freakin's Studio unified complex robotic telemetry hardware with a kinetic visual identity that secured institutional backing.",
-    challenge: "Apex Robotics was preparing to close an $18M Series-A round while launching their commercial warehouse bot fleet. Their existing visual presence lacked technical authority, relying on generic tech stock aesthetics that failed to communicate precision engineering.",
-    solution: "Freakin's Studio deployed our Identity Systems sprint (A1) paired with 3D Kinetic Motion (F1). We constructed a logomark based on robotic kinematic rotation matrices, developed a dark-mode industrial design token system, produced 4K hardware renders, and built an interactive 24-slide investor deck.",
+    timeline: "12 Days (Rush Protocol)",
+    servicesUsed: [
+      { id: "B02", label: "B02 · Complete Brand Identity Development" },
+      { id: "G03", label: "G03 · Business Pitch Decks" },
+      { id: "A05", label: "A05 · Business Cards & Stationery" },
+    ],
+    headline: "Architecting a Series-A Industrial Identity & Investor Suite",
+    summary:
+      "How Freakin's Studio unified complex robotic hardware engineering with a geometric visual identity that backed an $18.5M institutional round.",
+    challenge:
+      "Aurum Robotics was preparing to close Series-A capital while unveiling its autonomous warehouse fleet. Their existing branding relied on fragmented templates that failed to communicate engineering rigor.",
+    solution:
+      "We ran a synchronized Brand Identity sprint (B02) alongside an executive Business Pitch Deck (G03) and tactile stationery suite (A05). We built a mathematical monogram system, obsidian-and-gold typography guidelines, and 24 high-impact investor slides.",
     results: [
-      { label: "Series-A Capital Closed", value: "$18.5M" },
-      { label: "Turnaround Speed", value: "18 Days" },
-      { label: "Hardware Render Count", value: "14 High-Res 4K" },
+      { label: "Series-A Closed", value: "$18.5M" },
+      { label: "Turnaround Time", value: "12 Days" },
+      { label: "Deck Slides", value: "24 Slides" },
     ],
     testimonial: {
-      quote: "Freakin's Studio didn't just design a logo; they engineered an operating visual identity that gave our venture partners immediate conviction in our hardware.",
+      quote:
+        "Freakin's Studio didn't just refresh our logo—they engineered a complete visual identity and investor narrative that gave our partners immediate conviction.",
       author: "Dr. Marcus Vance",
-      role: "CEO & Founder, Apex Robotics",
+      role: "CEO & Founder, Aurum Robotics",
     },
-    imageUrl: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1200&q=80",
+    imageUrl: "/images/portfolio/brand-identity.jpg",
+    primaryServiceId: "B02",
   },
   {
-    slug: "finpulse-global",
-    client: "FinPulse Global Ltd",
-    industry: "Fintech & Wealth Management",
-    timeline: "4 Weeks",
-    servicesUsed: ["C1. Next.js High-Performance Marketing Platform", "C2. Interactive Mobile UI Application Flow", "B3. Design Tokens Architecture"],
-    headline: "Engineering a Headless Digital Banking Experience with Micro-Interactions",
-    summary: "Designing and engineering a modern cross-platform interface that turned complex asset allocation into an intuitive mobile experience.",
-    challenge: "FinPulse needed to transition from legacy web portals to a next-generation mobile banking experience. The platform required multi-currency account management, real-time portfolio charts, and instant fiat-to-yield swaps without user cognitive overload.",
-    solution: "We designed a 42-screen modular UI architecture in Figma, backed by CSS design tokens. We then built a Next.js 16 high-performance marketing platform with sub-second page transitions, dynamic currency conversion calculators, and interactive Lottie animations.",
+    slug: "kinetic-motion-aura",
+    client: "Kinetic Interactive Labs",
+    industry: "Consumer Tech & Entertainment",
+    timeline: "14 Days",
+    servicesUsed: [
+      { id: "C05", label: "C05 · 3D Animation & Visuals" },
+      { id: "C03", label: "C03 · Motion Graphics & Animated Typography" },
+      { id: "C07", label: "C07 · Product & Commercial Videos" },
+    ],
+    headline: "Producing a 4K 3D Kinetic Launch Film & Social Motion Engine",
+    summary:
+      "Delivering cinema-grade 3D animated typography, broadcast grading, and vertical social cutdowns for a synchronized global product reveal.",
+    challenge:
+      "Kinetic needed a flagship launch trailer and 12 platform-specific reels within a tight two-week window prior to their international keynote, without hiring separate 3D and post-production houses.",
+    solution:
+      "Our video and motion division combined 3D Animation & Visuals (C05) with Motion Graphics & Animated Typography (C03) and Commercial Video mastery (C07) inside a unified proofing room with coordinate pin reviews.",
     results: [
-      { label: "Mobile Onboarding Conversion", value: "+38%" },
-      { label: "Lighthouse Performance Score", value: "99 / 100" },
-      { label: "Screens Delivered & Tested", value: "42 Screens" },
+      { label: "Launch Views", value: "1.4M+" },
+      { label: "Reels Delivered", value: "12 Cuts" },
+      { label: "Revision Rounds", value: "2 / 4 Used" },
     ],
     testimonial: {
-      quote: "The speed and polish delivered by Freakin's Studio exceeded every traditional agency we previously engaged. Their Next.js and Figma token architecture saved us months of frontend rework.",
+      quote:
+        "Pin-point coordinate proofing cut our review cycle in half. Every 4K master and 9:16 social cutdown arrived calibrated and ready for global ad spend.",
       author: "Elena Rostova",
-      role: "Chief Product Officer, FinPulse Global",
+      role: "Chief Brand Officer, Kinetic Labs",
     },
-    imageUrl: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=1200&q=80",
+    imageUrl: "/images/portfolio/video-motion.jpg",
+    primaryServiceId: "C05",
   },
   {
-    slug: "neurosynth-audio",
-    client: "NeuroSynth Audio Labs",
-    industry: "AI Audio & Spatial Hardware",
-    timeline: "2 Weeks",
-    servicesUsed: ["F3. Bespoke Sonic Identity & Audio Chimes", "F1. 3D Cinematic Motion Reveal", "E1. Omnichannel Campaign Launch Pack"],
-    headline: "Sonic Branding & Spatial Sound Design for Next-Generation Audio Hardware",
-    summary: "Creating a multidimensional sonic logo, haptic product chimes, and a 3D procedural launch film for an AI sound synthesis device.",
-    challenge: "NeuroSynth created a breakthrough hardware synthesizer powered by neural sound generation. The product lacked an acoustic brand personality and needed launch materials that would resonate with audiophiles and electronic musicians globally.",
-    solution: "Our studio sound laboratory synthesized a signature 3-second sonic mnemonic using analog modular synths mixed with granular generative textures. We engineered 12 bespoke hardware interaction chimes in Dolby Atmos and paired them with a 3D procedural video trailer.",
+    slug: "aetheria-spatial",
+    client: "Aetheria Audio Systems",
+    industry: "Consumer Hardware & Luxury Electronics",
+    timeline: "10 Days",
+    servicesUsed: [
+      { id: "F02", label: "F02 · AI-Assisted Video Production" },
+      { id: "F05", label: "F05 · Digital Mockups & Product Visuals" },
+      { id: "E01", label: "E01 · Paid Advertising Creative Design" },
+    ],
+    headline: "AI-Assisted Hardware Visualization & Omnichannel Launch Campaign",
+    summary:
+      "Pairing generative 8K staging with human art direction and paid social ad creatives to drive 2,400 hardware pre-orders in 48 hours.",
+    challenge:
+      "With physical manufacturing prototypes still in transit, Aetheria needed photorealistic product staging, launch teasers, and paid acquisition creatives for Meta and Google Display ahead of schedule.",
+    solution:
+      "We deployed AI-Assisted Video Production (F02) and Digital Product Mockups (F05), refined by senior retouchers, and exported a 16-asset Paid Advertising Creative suite (E01) with verified ROAS hooks.",
     results: [
-      { label: "Launch Video Impressions", value: "1.4M+" },
-      { label: "Pre-Orders Within 48 Hours", value: "2,400 Units" },
-      { label: "Master Audio Deliverables", value: "24-bit 96kHz" },
+      { label: "48h Pre-Orders", value: "2,400" },
+      { label: "Ad ROAS Uplift", value: "+42%" },
+      { label: "Master Assets", value: "36 Files" },
     ],
     testimonial: {
-      quote: "Their team understands the physics of sound and the art of brand storytelling equally. The sonic identity has become universally recognized among our creator community.",
+      quote:
+        "Having product visuals, launch video, and paid social creatives built under one roof saved us six weeks of studio logistics and directly fueled our sellout launch.",
       author: "Julian Thorne",
-      role: "Head of Hardware, NeuroSynth",
+      role: "Head of Hardware, Aetheria Systems",
     },
-    imageUrl: "https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?auto=format&fit=crop&w=1200&q=80",
+    imageUrl: "/images/portfolio/ai-creative.jpg",
+    primaryServiceId: "F02",
   },
 ];
 
@@ -110,25 +138,25 @@ export default function CaseStudiesPage() {
           {/* Header */}
           <div className="space-y-4 max-w-3xl">
             <span className="badge-mono text-brand-highlight">In-Depth Case Studies</span>
-            <h1 className="text-4xl sm:text-6xl font-bold tracking-tight text-brand-light">
+            <h1 className="text-4xl sm:text-6xl font-bold tracking-tight text-brand-light text-balance">
               Results Measured in Real Commercial Value.
             </h1>
             <p className="text-base sm:text-lg text-brand-muted leading-relaxed">
-              Discover how visionary founders, enterprise brands, and product teams leverage Freakin&apos;s Studio
-              to achieve decisive market advantage through design excellence and technical execution.
+              Discover how visionary founders, enterprise brands, and growth teams deploy Freakin&apos;s Studio
+              across our 60 canonical services to achieve decisive market results.
             </p>
           </div>
 
           {/* Case Studies Detailed List */}
-          <div className="space-y-20">
+          <div className="space-y-16">
             {CASE_STUDIES.map((study, idx) => (
               <article
                 key={study.slug}
-                className="rounded-2xl border border-brand-border bg-brand-surface/30 p-8 sm:p-12 space-y-8"
+                className="rounded-2xl border border-brand-border bg-brand-surface/30 p-6 sm:p-10 space-y-8"
               >
                 {/* Meta Bar */}
-                <div className="flex flex-wrap items-center justify-between gap-4 border-b border-brand-border/60 pb-6 text-xs font-mono">
-                  <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center justify-between gap-4 border-b border-brand-border/60 pb-5 text-xs font-mono">
+                  <div className="flex flex-wrap items-center gap-3">
                     <span className="text-brand-light font-bold">Case Study 0{idx + 1}</span>
                     <span className="text-brand-border">&bull;</span>
                     <span className="text-brand-highlight">{study.client}</span>
@@ -136,50 +164,60 @@ export default function CaseStudiesPage() {
                     <span className="text-brand-muted">{study.industry}</span>
                   </div>
                   <div className="text-brand-muted">
-                    Production Timeline: <span className="text-brand-light font-semibold">{study.timeline}</span>
+                    Timeline: <span className="text-brand-light font-semibold">{study.timeline}</span>
                   </div>
                 </div>
 
                 {/* Main Content Grid */}
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-                  <div className="lg:col-span-7 space-y-6">
-                    <h2 className="text-2xl sm:text-3xl font-bold text-brand-light leading-snug">
-                      {study.headline}
-                    </h2>
-                    <p className="text-sm font-medium text-brand-muted leading-relaxed">
-                      {study.summary}
-                    </p>
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
+                  <div className="lg:col-span-7 flex flex-col justify-between space-y-6">
+                    <div className="space-y-5">
+                      <h2 className="text-2xl sm:text-3xl font-bold text-brand-light leading-snug">
+                        {study.headline}
+                      </h2>
+                      <p className="text-sm font-medium text-brand-muted leading-relaxed">
+                        {study.summary}
+                      </p>
 
-                    <div className="space-y-4 pt-2 text-xs leading-relaxed text-brand-muted">
-                      <div>
-                        <h4 className="font-mono uppercase font-semibold text-brand-light text-xs mb-1">
-                          The Challenge
-                        </h4>
-                        <p>{study.challenge}</p>
+                      <div className="space-y-4 pt-2 text-xs leading-relaxed text-brand-muted">
+                        <div>
+                          <h3 className="font-mono uppercase font-semibold text-brand-light text-xs mb-1">
+                            The Challenge
+                          </h3>
+                          <p>{study.challenge}</p>
+                        </div>
+                        <div>
+                          <h3 className="font-mono uppercase font-semibold text-brand-light text-xs mb-1">
+                            The Studio Solution
+                          </h3>
+                          <p>{study.solution}</p>
+                        </div>
                       </div>
-                      <div>
-                        <h4 className="font-mono uppercase font-semibold text-brand-light text-xs mb-1">
-                          The Studio Solution
+
+                      {/* Canonical services used */}
+                      <div className="space-y-2 pt-2">
+                        <h4 className="font-mono uppercase text-[10px] text-brand-muted">
+                          Canonical Services Deployed
                         </h4>
-                        <p>{study.solution}</p>
+                        <div className="flex flex-wrap gap-3 text-xs font-mono">
+                          {study.servicesUsed.map((srv) => (
+                            <Link
+                              key={srv.id}
+                              href={`/services/${srv.id}`}
+                              className="text-brand-highlight hover:underline"
+                            >
+                              {srv.label}
+                            </Link>
+                          ))}
+                        </div>
                       </div>
                     </div>
 
-                    {/* Services used */}
-                    <div className="space-y-2 pt-2">
-                      <h4 className="font-mono uppercase text-[10px] text-brand-muted">Services Deployed:</h4>
-                      <div className="flex flex-wrap gap-2">
-                        {study.servicesUsed.map((srv, sIdx) => (
-                          <Badge key={sIdx} variant="outline" className="badge-mono border-brand-border text-brand-light text-[11px]">
-                            {srv}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Testimonial Quote */}
-                    <blockquote className="rounded-lg border-l-2 border-brand-highlight bg-brand-surface/60 p-4 space-y-2 text-xs">
-                      <p className="italic text-brand-light">&ldquo;{study.testimonial.quote}&rdquo;</p>
+                    {/* Testimonial Quote — hairline border all around, no thick left bar */}
+                    <blockquote className="rounded-xl border border-brand-border bg-brand-surface/70 p-5 space-y-2 text-xs">
+                      <p className="italic text-brand-light leading-relaxed">
+                        &ldquo;{study.testimonial.quote}&rdquo;
+                      </p>
                       <footer className="font-mono text-[11px] text-brand-muted">
                         &mdash; <strong className="text-brand-light">{study.testimonial.author}</strong>, {study.testimonial.role}
                       </footer>
@@ -187,37 +225,42 @@ export default function CaseStudiesPage() {
                   </div>
 
                   {/* Sidebar with Image & Metrics */}
-                  <div className="lg:col-span-5 space-y-6">
-                    <div className="relative h-64 sm:h-80 w-full overflow-hidden rounded-xl border border-brand-border bg-brand-border/20">
-                      <img
+                  <div className="lg:col-span-5 flex flex-col justify-between space-y-6">
+                    <div className="relative h-64 sm:h-80 w-full overflow-hidden rounded-xl border border-brand-border bg-brand-surface">
+                      <ShowcaseImage
                         src={study.imageUrl}
                         alt={study.headline}
-                        className="h-full w-full object-cover"
-                        loading="lazy"
+                        caption={study.client}
+                        className="object-cover"
                       />
                     </div>
 
-                    {/* Metrics Cards */}
-                    <div className="grid grid-cols-3 gap-3">
-                      {study.results.map((res, rIdx) => (
-                        <div
-                          key={rIdx}
-                          className="rounded-lg border border-brand-border bg-brand-surface/60 p-3 text-center space-y-1"
-                        >
-                          <div className="font-mono text-lg font-bold text-brand-highlight">
-                            {res.value}
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-3 gap-3 tabular-nums">
+                        {study.results.map((res, rIdx) => (
+                          <div
+                            key={rIdx}
+                            className="rounded-lg border border-brand-border bg-brand-surface/60 p-3 text-center space-y-1"
+                          >
+                            <div className="font-mono text-lg font-bold text-brand-highlight">
+                              {res.value}
+                            </div>
+                            <div className="text-[10px] font-mono text-brand-muted uppercase leading-tight">
+                              {res.label}
+                            </div>
                           </div>
-                          <div className="text-[10px] font-mono text-brand-muted uppercase leading-tight">
-                            {res.label}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                        ))}
+                      </div>
 
-                    <Button
-                      render={<Link href="/builder">Configure Similar Scope in Builder &rarr;</Link>}
-                      className="w-full cyber-glow text-xs font-mono h-10"
-                    />
+                      <Button
+                        render={
+                          <Link href={`/builder?service=${study.primaryServiceId}`}>
+                            Configure Similar Scope ({study.primaryServiceId}) &rarr;
+                          </Link>
+                        }
+                        className="w-full cyber-glow bg-brand-highlight hover:bg-brand-highlight/90 text-brand-black font-semibold text-xs font-mono h-10"
+                      />
+                    </div>
                   </div>
                 </div>
               </article>
@@ -226,22 +269,23 @@ export default function CaseStudiesPage() {
 
           {/* Direct CTA */}
           <div className="rounded-2xl border border-brand-border bg-brand-surface/40 p-8 sm:p-12 text-center space-y-4">
-            <h2 className="text-2xl sm:text-4xl font-bold text-brand-light">
+            <h2 className="text-2xl sm:text-4xl font-bold text-brand-light text-balance">
               Start your next production chapter with Freakin&apos;s Studio.
             </h2>
             <p className="text-sm text-brand-muted max-w-xl mx-auto">
               Choose from 60 precision creative services, tailor your scope, and get started today.
             </p>
-            <div className="pt-2 flex justify-center gap-4">
+            <div className="pt-2 flex flex-wrap justify-center gap-4">
               <Button
                 render={<Link href="/builder">Launch Package Builder</Link>}
                 size="lg"
-                className="cyber-glow"
+                className="cyber-glow bg-brand-highlight hover:bg-brand-highlight/90 text-brand-black font-semibold font-mono text-sm"
               />
               <Button
                 render={<Link href="/services">Browse 60 Services</Link>}
                 size="lg"
                 variant="outline"
+                className="font-mono text-sm border-brand-border text-brand-light"
               />
             </div>
           </div>

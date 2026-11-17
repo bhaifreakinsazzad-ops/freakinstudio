@@ -11,14 +11,16 @@ import { Input } from "@/components/ui/input";
 interface ServicesCatalogClientProps {
   initialCategories: ServiceCategory[];
   initialServices: Service[];
+  initialCategory?: string;
 }
 
 export function ServicesCatalogClient({
   initialCategories,
   initialServices,
+  initialCategory = "ALL",
 }: ServicesCatalogClientProps) {
   const { locale } = useLocale();
-  const [activeCategory, setActiveCategory] = useState<string>("ALL");
+  const [activeCategory, setActiveCategory] = useState<string>(initialCategory);
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [currency, setCurrency] = useState<Currency>("BDT");
   const [sortBy, setSortBy] = useState<"id" | "price-asc" | "price-desc" | "days">("id");
@@ -273,7 +275,7 @@ export function ServicesCatalogClient({
                         <Link href={`/builder?service=${service.id}`}>Add to Scope</Link>
                       }
                       size="sm"
-                      className="text-xs font-mono h-8 px-3 cyber-glow bg-brand-highlight hover:bg-brand-highlight/90 text-white"
+                      className="text-xs font-mono font-semibold h-8 px-3 cyber-glow bg-brand-highlight hover:bg-brand-highlight/90 text-brand-black"
                     />
                   </div>
                 </div>

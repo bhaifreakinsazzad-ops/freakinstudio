@@ -231,7 +231,7 @@ export default async function ServiceDetailPage({
                     </Link>
                   }
                   size="lg"
-                  className="w-full cyber-glow bg-brand-highlight hover:bg-brand-highlight/90 text-white font-mono text-sm"
+                  className="w-full cyber-glow bg-brand-highlight hover:bg-brand-highlight/90 text-brand-black font-semibold font-mono text-sm"
                 />
 
                 <Button

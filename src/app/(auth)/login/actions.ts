@@ -14,6 +14,10 @@ export async function login(formData: FormData) {
     redirect(`/login?error=${encodeURIComponent("Enter a valid email and password")}`);
   }
 
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    redirect(`/login?error=${encodeURIComponent("Authentication is not configured in this environment yet.")}`);
+  }
+
   const supabase = await createClient();
   const { error } = await supabase.auth.signInWithPassword(parsed.data);
 

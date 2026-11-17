@@ -12,11 +12,22 @@ export const metadata: Metadata = {
 
 export const instant = false;
 
-export default async function ServicesPage() {
+export default async function ServicesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ category?: string }>;
+}) {
+  const { category } = await searchParams;
   const [categories, services] = await Promise.all([
     getCatalogCategories(),
     getCatalogServices(),
   ]);
+
+  const normalizedCategory = category?.toUpperCase();
+  const initialCategory =
+    normalizedCategory && categories.some((c) => c.id === normalizedCategory)
+      ? normalizedCategory
+      : "ALL";
 
   return (
     <>
@@ -39,6 +50,7 @@ export default async function ServicesPage() {
           <ServicesCatalogClient
             initialCategories={categories}
             initialServices={services}
+            initialCategory={initialCategory}
           />
         </div>
       </main>

@@ -82,7 +82,7 @@
   --popover: var(--color-brand-card);
   --popover-foreground: var(--color-brand-light);
   --primary: var(--color-brand-highlight);
-  --primary-foreground: var(--color-brand-light);
+  --primary-foreground: var(--color-brand-black);
   --secondary: var(--color-brand-surface);
   --secondary-foreground: var(--color-brand-light);
   --muted: var(--color-brand-surface);
@@ -102,7 +102,7 @@
   --sidebar: var(--color-brand-surface);
   --sidebar-foreground: var(--color-brand-light);
   --sidebar-primary: var(--color-brand-highlight);
-  --sidebar-primary-foreground: var(--color-brand-light);
+  --sidebar-primary-foreground: var(--color-brand-black);
   --sidebar-accent: var(--color-brand-card);
   --sidebar-accent-foreground: var(--color-brand-light);
   --sidebar-border: var(--color-brand-border);

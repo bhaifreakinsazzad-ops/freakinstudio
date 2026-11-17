@@ -17,6 +17,10 @@ export async function signup(formData: FormData) {
     redirect(`/signup?error=${encodeURIComponent(message)}`);
   }
 
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    redirect(`/signup?error=${encodeURIComponent("Authentication is not configured in this environment yet.")}`);
+  }
+
   const supabase = await createClient();
   const origin = (await headers()).get("origin");
 

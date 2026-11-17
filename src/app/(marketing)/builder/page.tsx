@@ -23,9 +23,10 @@ export const instant = false;
 export default async function BuilderPage({
   searchParams,
 }: {
-  searchParams: Promise<{ service?: string }>;
+  searchParams: Promise<{ service?: string; payment?: string; error?: string }>;
 }) {
-  const { service: initialServiceId } = await searchParams;
+  const { service: rawServiceId, payment: paymentStatus, error: paymentError } =
+    await searchParams;
 
   const [categories, services, addOns] = await Promise.all([
     getCatalogCategories(),
@@ -33,18 +34,33 @@ export default async function BuilderPage({
     getAllAddOns(),
   ]);
 
+  const normalizedServiceId = rawServiceId?.toUpperCase();
+  const initialServiceId =
+    normalizedServiceId && services.some((s) => s.id === normalizedServiceId)
+      ? normalizedServiceId
+      : undefined;
+
   const serviceAddOnsMap = getAllServiceAddOnsMap();
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
+  let user = null;
   let initialDrafts: PackageDraft[] = [];
-  if (user) {
-    const draftsRes = await getUserDraftsAction();
-    if (draftsRes.ok && draftsRes.drafts) {
-      initialDrafts = draftsRes.drafts;
+
+  if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    try {
+      const supabase = await createClient();
+      const {
+        data: { user: authUser },
+      } = await supabase.auth.getUser();
+      user = authUser;
+
+      if (user) {
+        const draftsRes = await getUserDraftsAction();
+        if (draftsRes.ok && draftsRes.drafts) {
+          initialDrafts = draftsRes.drafts;
+        }
+      }
+    } catch {
+      user = null;
     }
   }
 
@@ -72,6 +88,8 @@ export default async function BuilderPage({
             serviceAddOnsMap={serviceAddOnsMap}
             initialDrafts={initialDrafts}
             initialServiceId={initialServiceId}
+            paymentStatus={paymentStatus}
+            paymentError={paymentError}
             isAuthenticated={!!user}
           />
         </div>

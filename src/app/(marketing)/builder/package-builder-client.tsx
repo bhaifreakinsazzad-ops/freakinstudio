@@ -37,6 +37,8 @@ interface PackageBuilderClientProps {
   serviceAddOnsMap?: Record<string, AddOn[]>;
   initialDrafts?: PackageDraft[];
   initialServiceId?: string;
+  paymentStatus?: string;
+  paymentError?: string;
   isAuthenticated: boolean;
 }
 
@@ -47,10 +49,18 @@ export function PackageBuilderClient({
   serviceAddOnsMap,
   initialDrafts = [],
   initialServiceId,
+  paymentStatus,
+  paymentError,
   isAuthenticated,
 }: PackageBuilderClientProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const [dismissedPaymentAlert, setDismissedPaymentAlert] = useState(false);
+
+  const validInitialServiceId =
+    initialServiceId && services.some((s) => s.id === initialServiceId.toUpperCase())
+      ? initialServiceId.toUpperCase()
+      : undefined;
 
   // Current Step (1 - 7)
   const [currentStep, setCurrentStep] = useState<number>(1);
@@ -88,26 +98,31 @@ export function PackageBuilderClient({
     };
   });
 
-  // Step 2: Selected Services — initialized lazily from draft if present
+  // Step 2: Selected Services — URL ?service= parameter takes precedence over stale localStorage draft
   const [selectedServices, setSelectedServices] = useState<string[]>(() => {
+    if (validInitialServiceId) return [validInitialServiceId];
     const draft = getLocalDraft();
     if (draft?.services && draft.services.length > 0) return draft.services;
-    if (initialServiceId) return [initialServiceId.toUpperCase()];
     return ["A01"];
   });
 
   // Category filter & search for Step 2
-  const [activeCategory, setActiveCategory] = useState<string>("ALL");
+  const [activeCategory, setActiveCategory] = useState<string>(() => {
+    if (validInitialServiceId) return validInitialServiceId.charAt(0);
+    return "ALL";
+  });
   const [searchQuery, setSearchQuery] = useState<string>("");
 
-  // Step 3: Service Configs — initialized lazily from draft if present
+  // Step 3: Service Configs — ensure selected initial service always has a schema config
   const [serviceConfigs, setServiceConfigs] = useState<Record<string, ServiceConfig>>(() => {
-    const draft = getLocalDraft();
-    if (draft?.serviceConfigs && Object.keys(draft.serviceConfigs).length > 0) {
-      return draft.serviceConfigs;
-    }
     const initConfigs: Record<string, ServiceConfig> = {};
-    const initList = initialServiceId ? [initialServiceId.toUpperCase()] : ["A01"];
+    if (!validInitialServiceId) {
+      const draft = getLocalDraft();
+      if (draft?.serviceConfigs && Object.keys(draft.serviceConfigs).length > 0) {
+        return draft.serviceConfigs;
+      }
+    }
+    const initList = validInitialServiceId ? [validInitialServiceId] : ["A01"];
     initList.forEach((id) => {
       const schema = getServiceConfigSchema(id);
       initConfigs[id] = {
@@ -324,6 +339,28 @@ export function PackageBuilderClient({
 
   return (
     <div className="space-y-8">
+      {/* Payment Callback Error/Status Banner */}
+      {!dismissedPaymentAlert && (paymentStatus === "failed" || paymentError) && (
+        <div className="p-4 rounded-2xl border border-brand-danger/40 bg-brand-danger/10 flex items-start justify-between gap-4 text-xs font-mono">
+          <div className="space-y-1">
+            <span className="font-bold text-brand-danger uppercase block">
+              Payment Settlement Interrupted
+            </span>
+            <p className="text-brand-light">
+              {paymentError || "The payment gateway returned an unsuccessful status. Please verify your settlement channel and try again."}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setDismissedPaymentAlert(true)}
+            className="text-brand-muted hover:text-brand-light px-2 py-1"
+            aria-label="Dismiss payment notice"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* Step Navigation Progress Bar */}
       <div className="glass-panel p-4 rounded-2xl border border-brand-border space-y-3">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -547,7 +584,7 @@ export function PackageBuilderClient({
               <div className="flex justify-end pt-4 border-t border-brand-border">
                 <Button
                   onClick={() => setCurrentStep(2)}
-                  className="cyber-glow bg-brand-highlight hover:bg-brand-highlight/90 text-white font-mono text-xs px-6"
+                  className="cyber-glow bg-brand-highlight hover:bg-brand-highlight/90 text-brand-black font-semibold font-mono text-xs px-6"
                 >
                   Proceed to Service Selection &rarr;
                 </Button>
@@ -636,7 +673,7 @@ export function PackageBuilderClient({
                           <span
                             className={`w-4 h-4 rounded-full border flex items-center justify-center text-[10px] font-bold ${
                               isSelected
-                                ? "bg-brand-highlight text-white border-brand-highlight"
+                                ? "bg-brand-highlight text-brand-black border-brand-highlight"
                                 : "border-brand-border"
                             }`}
                           >
@@ -680,7 +717,7 @@ export function PackageBuilderClient({
                 <Button
                   onClick={() => setCurrentStep(3)}
                   disabled={selectedServices.length === 0}
-                  className="cyber-glow bg-brand-highlight hover:bg-brand-highlight/90 text-white font-mono text-xs px-6"
+                  className="cyber-glow bg-brand-highlight hover:bg-brand-highlight/90 text-brand-black font-semibold font-mono text-xs px-6"
                 >
                   Configure Quantities ({selectedServices.length}) &rarr;
                 </Button>
@@ -845,7 +882,7 @@ export function PackageBuilderClient({
                 </Button>
                 <Button
                   onClick={() => setCurrentStep(4)}
-                  className="cyber-glow bg-brand-highlight hover:bg-brand-highlight/90 text-white font-mono text-xs px-6"
+                  className="cyber-glow bg-brand-highlight hover:bg-brand-highlight/90 text-brand-black font-semibold font-mono text-xs px-6"
                 >
                   Proceed to Add-ons &rarr;
                 </Button>
@@ -902,9 +939,9 @@ export function PackageBuilderClient({
                             >
                               <div className="flex items-center gap-2">
                                 <span
-                                  className={`w-3.5 h-3.5 rounded border flex items-center justify-center text-[9px] ${
+                                  className={`w-3.5 h-3.5 rounded border flex items-center justify-center text-[9px] font-bold ${
                                     isChecked
-                                      ? "bg-brand-highlight text-white border-brand-highlight"
+                                      ? "bg-brand-highlight text-brand-black border-brand-highlight"
                                       : "border-brand-border"
                                   }`}
                                 >
@@ -942,7 +979,7 @@ export function PackageBuilderClient({
                 </Button>
                 <Button
                   onClick={() => setCurrentStep(5)}
-                  className="cyber-glow bg-brand-highlight hover:bg-brand-highlight/90 text-white font-mono text-xs px-6"
+                  className="cyber-glow bg-brand-highlight hover:bg-brand-highlight/90 text-brand-black font-semibold font-mono text-xs px-6"
                 >
                   Review Scope Audit &rarr;
                 </Button>
@@ -1033,7 +1070,7 @@ export function PackageBuilderClient({
                 </Button>
                 <Button
                   onClick={() => setCurrentStep(6)}
-                  className="cyber-glow bg-brand-highlight hover:bg-brand-highlight/90 text-white font-mono text-xs px-6"
+                  className="cyber-glow bg-brand-highlight hover:bg-brand-highlight/90 text-brand-black font-semibold font-mono text-xs px-6"
                 >
                   Calculate Authoritative Pricing &rarr;
                 </Button>
@@ -1098,8 +1135,7 @@ export function PackageBuilderClient({
               {/* Quotation Required Notice */}
               {pricingSummary.quoteRequired && (
                 <div className="p-5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-xs space-y-2">
-                  <div className="flex items-center gap-2 text-amber-400 font-bold font-mono">
-                    <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                  <div className="text-amber-400 font-bold font-mono">
                     Formal Studio Quotation Required
                   </div>
                   <p className="text-brand-muted text-[11px]">
@@ -1124,7 +1160,7 @@ export function PackageBuilderClient({
                 </Button>
                 <Button
                   onClick={() => setCurrentStep(7)}
-                  className="cyber-glow bg-brand-highlight hover:bg-brand-highlight/90 text-white font-mono text-xs px-6"
+                  className="cyber-glow bg-brand-highlight hover:bg-brand-highlight/90 text-brand-black font-semibold font-mono text-xs px-6"
                 >
                   Proceed to Launch Action &rarr;
                 </Button>
@@ -1158,7 +1194,7 @@ export function PackageBuilderClient({
                   <Button
                     onClick={handleRequestQuote}
                     disabled={isPending}
-                    className="w-full cyber-glow bg-brand-highlight hover:bg-brand-highlight/90 text-white font-mono text-sm py-6"
+                    className="w-full cyber-glow bg-brand-highlight hover:bg-brand-highlight/90 text-brand-black font-semibold font-mono text-sm py-6"
                   >
                     {isPending ? "Lodging Quotation..." : "Lodge Formal Quotation Request"}
                   </Button>
@@ -1184,7 +1220,7 @@ export function PackageBuilderClient({
                     <Button
                       variant="outline"
                       size="sm"
-                      className="w-full text-xs font-mono group-hover:bg-brand-highlight group-hover:text-white group-hover:border-transparent transition-all"
+                      className="w-full text-xs font-mono group-hover:bg-brand-highlight group-hover:text-brand-black group-hover:font-semibold group-hover:border-transparent transition-all"
                     >
                       Checkout with SSLCOMMERZ
                     </Button>
@@ -1209,7 +1245,7 @@ export function PackageBuilderClient({
                     <Button
                       variant="outline"
                       size="sm"
-                      className="w-full text-xs font-mono group-hover:bg-brand-highlight group-hover:text-white group-hover:border-transparent transition-all"
+                      className="w-full text-xs font-mono group-hover:bg-brand-highlight group-hover:text-brand-black group-hover:font-semibold group-hover:border-transparent transition-all"
                     >
                       Checkout with Stripe
                     </Button>
@@ -1353,12 +1389,9 @@ export function PackageBuilderClient({
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
           <div className="glass-panel w-full max-w-md p-6 sm:p-8 rounded-3xl border border-brand-border shadow-2xl space-y-6 cyber-glow">
             <div className="flex items-center justify-between border-b border-brand-border pb-3">
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
-                <h3 className="font-bold text-sm text-brand-light font-mono uppercase">
-                  {checkoutGateway.toUpperCase()} Hosted Checkout Adapter
-                </h3>
-              </div>
+              <h3 className="font-bold text-sm text-brand-light font-mono uppercase">
+                {checkoutGateway.toUpperCase()} Hosted Checkout Adapter
+              </h3>
               <button
                 type="button"
                 onClick={() => setIsCheckoutModalOpen(false)}
@@ -1409,7 +1442,7 @@ export function PackageBuilderClient({
 
                 <Button
                   onClick={handleConfirmCheckoutPayment}
-                  className="w-full cyber-glow bg-brand-highlight hover:bg-brand-highlight/90 text-white font-mono text-sm py-5"
+                  className="w-full cyber-glow bg-brand-highlight hover:bg-brand-highlight/90 text-brand-black font-semibold font-mono text-sm py-5"
                 >
                   Launch Payment Simulation &rarr;
                 </Button>
@@ -1456,7 +1489,7 @@ export function PackageBuilderClient({
                     setIsCheckoutModalOpen(false);
                     router.push("/dashboard");
                   }}
-                  className="cyber-glow bg-brand-highlight hover:bg-brand-highlight/90 text-white font-mono text-xs w-full py-5"
+                  className="cyber-glow bg-brand-highlight hover:bg-brand-highlight/90 text-brand-black font-semibold font-mono text-xs w-full py-5"
                 >
                   Enter Project Workspace & Complete Brief &rarr;
                 </Button>

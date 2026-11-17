@@ -42,6 +42,9 @@ interface DashboardClientProps {
   projects: ClientProject[];
   quotes: ClientQuote[];
   orders: ClientOrder[];
+  paymentStatus?: string;
+  transactionRef?: string;
+  noticeError?: string;
 }
 
 export function DashboardClient({
@@ -49,11 +52,53 @@ export function DashboardClient({
   projects,
   quotes,
   orders,
+  paymentStatus,
+  transactionRef,
+  noticeError,
 }: DashboardClientProps) {
   const [selectedInvoice, setSelectedInvoice] = useState<ClientOrder | null>(null);
+  const [dismissedBanner, setDismissedBanner] = useState(false);
 
   return (
     <div className="space-y-10">
+      {/* Payment Settlement or Access Notice Banner */}
+      {!dismissedBanner && (paymentStatus === "success" || noticeError) && (
+        <div
+          className={`p-4 rounded-2xl border flex items-start justify-between gap-4 text-xs font-mono ${
+            paymentStatus === "success"
+              ? "border-emerald-500/40 bg-emerald-500/10"
+              : "border-amber-500/40 bg-amber-500/10"
+          }`}
+        >
+          <div className="space-y-1">
+            <span
+              className={`font-bold uppercase block ${
+                paymentStatus === "success" ? "text-emerald-400" : "text-amber-400"
+              }`}
+            >
+              {paymentStatus === "success"
+                ? "Payment Verified & Workspace Provisioned"
+                : "Workspace Access Notice"}
+            </span>
+            <p className="text-brand-light">
+              {paymentStatus === "success"
+                ? `Settlement confirmed${transactionRef ? ` (Ref: ${transactionRef})` : ""}. Complete your project onboarding brief below to start studio production.`
+                : noticeError === "admin_access_required"
+                ? "Studio Admin OS is restricted to studio administrators. You have been routed to your client workspace."
+                : noticeError}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setDismissedBanner(true)}
+            className="text-brand-muted hover:text-brand-light px-2 py-1"
+            aria-label="Dismiss notice"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* Top Banner & Quick Metrics */}
       <div className="glass-panel p-6 sm:p-8 rounded-3xl border border-brand-border space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -72,7 +117,7 @@ export function DashboardClient({
           <div className="flex items-center gap-2">
             <Button
               render={<Link href="/builder">Launch Package Builder</Link>}
-              className="cyber-glow bg-brand-highlight hover:bg-brand-highlight/90 text-white font-mono text-xs px-5"
+              className="cyber-glow bg-brand-highlight hover:bg-brand-highlight/90 text-brand-black font-semibold font-mono text-xs px-5"
             />
             {profile?.role && (profile.role === "studio_admin" || profile.role === "super_admin") && (
               <Button
@@ -104,8 +149,7 @@ export function DashboardClient({
       {/* SECTION 1: ACTIVE PRODUCTION PROJECTS */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-brand-light font-mono flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-brand-highlight" />
+          <h2 className="text-lg font-bold text-brand-light font-mono">
             Active Creative Production Projects ({projects.length})
           </h2>
         </div>
@@ -155,7 +199,7 @@ export function DashboardClient({
                   <Button
                     render={<Link href={`/dashboard/projects/${proj.id}`}>Enter Workspace</Link>}
                     size="sm"
-                    className="cyber-glow bg-brand-highlight hover:bg-brand-highlight/90 text-white font-mono text-xs w-full"
+                    className="cyber-glow bg-brand-highlight hover:bg-brand-highlight/90 text-brand-black font-semibold font-mono text-xs w-full"
                   />
                 </div>
               </div>
@@ -167,8 +211,7 @@ export function DashboardClient({
       {/* SECTION 2: FORMAL QUOTATIONS DESK */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-brand-light font-mono flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-amber-400" />
+          <h2 className="text-lg font-bold text-brand-light font-mono">
             Commercial Quotations Desk ({quotes.length})
           </h2>
         </div>
@@ -227,9 +270,8 @@ export function DashboardClient({
       {/* SECTION 3: RECENT ORDERS & INVOICES */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-brand-light font-mono flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-400" />
-            Settled Orders & Branded Invoices ({orders.length})
+          <h2 className="text-lg font-bold text-brand-light font-mono">
+            Settled Orders &amp; Branded Invoices ({orders.length})
           </h2>
         </div>
 

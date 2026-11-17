@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState } from "react";
+import React, { createContext, useContext, useSyncExternalStore } from "react";
 
 export type Locale = "en" | "bn";
 
@@ -12,14 +12,15 @@ interface Dictionary {
 }
 
 const UI_DICTIONARY: Dictionary = {
-  nav_services: { en: "Services (60)", bn: "সার্ভিস সমূহ (৬০)" },
+  nav_services: { en: "Services (60)", bn: "সার্ভিস (৬০)" },
   nav_builder: { en: "Package Builder", bn: "প্যাকেজ বিল্ডার" },
   nav_portfolio: { en: "Portfolio", bn: "পোর্টফোলিও" },
   nav_case_studies: { en: "Case Studies", bn: "কেস স্টাডি" },
   nav_workspace: { en: "Workspace", bn: "ওয়ার্কস্পেস" },
+  nav_contact: { en: "Contact", bn: "যোগাযোগ" },
   nav_sign_in: { en: "Sign in", bn: "সাইন ইন" },
   nav_sign_up: { en: "Sign up", bn: "সাইন আপ" },
-  nav_build_package: { en: "Build Package", bn: "প্যাকেজ তৈরি করুন" },
+  nav_build_package: { en: "Build Package", bn: "প্যাকেজ তৈরি" },
   hero_badge: { en: "Creative Commerce OS", bn: "ক্রিয়েটিভ কমার্স ওএস" },
   all_categories: { en: "All Categories", bn: "সকল ক্যাটাগরি" },
   search_services: { en: "Search 60 creative services...", bn: "৬০টি ক্রিয়েটিভ সার্ভিস খুঁজুন..." },
@@ -44,26 +45,49 @@ const LocaleContext = createContext<LocaleContextType>({
   t: (key: string) => key,
 });
 
-export function LocaleProvider({ children }: { children: React.ReactNode }) {
-  const [locale, setLocaleState] = useState<Locale>(() => {
+const localeListeners = new Set<() => void>();
+
+function subscribeLocale(callback: () => void): () => void {
+  localeListeners.add(callback);
+  if (typeof window !== "undefined") {
+    window.addEventListener("storage", callback);
+  }
+  return () => {
+    localeListeners.delete(callback);
     if (typeof window !== "undefined") {
-      try {
-        const stored = localStorage.getItem("fs_locale") as Locale | null;
-        if (stored === "en" || stored === "bn") return stored;
-      } catch {
-        // Ignore localStorage issues
-      }
+      window.removeEventListener("storage", callback);
     }
+  };
+}
+
+function getLocaleSnapshot(): Locale {
+  if (typeof window === "undefined") return "en";
+  try {
+    const stored = localStorage.getItem("fs_locale");
+    return stored === "bn" ? "bn" : "en";
+  } catch {
     return "en";
-  });
+  }
+}
+
+function getLocaleServerSnapshot(): Locale {
+  return "en";
+}
+
+export function LocaleProvider({ children }: { children: React.ReactNode }) {
+  const locale = useSyncExternalStore(
+    subscribeLocale,
+    getLocaleSnapshot,
+    getLocaleServerSnapshot
+  );
 
   const setLocale = (newLocale: Locale) => {
-    setLocaleState(newLocale);
     try {
       localStorage.setItem("fs_locale", newLocale);
     } catch {
-      // Ignore
+      // Ignore storage restrictions
     }
+    localeListeners.forEach((listener) => listener());
   };
 
   const toggleLocale = () => {

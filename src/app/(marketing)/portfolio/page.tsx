@@ -1,14 +1,14 @@
-/* eslint-disable @next/next/no-img-element */
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Navbar } from "@/components/layout/navbar";
 import { Footer } from "@/components/layout/footer";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ShowcaseImage } from "@/components/ui/ShowcaseImage";
 
 export const metadata: Metadata = {
   title: "Portfolio Showcase — Freakin's Studio",
-  description: "Exemplary brand systems, 3D kinetic visuals, web platforms, and sonic design engineered by Freakin's Studio.",
+  description:
+    "Exemplary brand identity systems, commercial video & 3D motion, AI-assisted creative production, luxury packaging, ad suites, and corporate decks engineered by Freakin's Studio.",
 };
 
 export const instant = false;
@@ -28,76 +28,82 @@ interface PortfolioProject {
 
 const PORTFOLIO_PROJECTS: PortfolioProject[] = [
   {
-    id: "p-apex",
-    categoryCode: "A",
-    categoryName: "Identity Systems",
-    title: "Apex Robotics — Series-A Visual Architecture",
-    client: "Apex Autonomous Corp",
-    description: "Complete corporate brand system, custom mathematical logomark, design tokens, and comprehensive brand guide for an autonomous logistics startup.",
-    deliverables: ["Vector Master SVG", "Brand Book Guidelines", "Design Tokens JSON", "Stationery Pack"],
-    metrics: "4.8x increase in Series-A pitch visual valuation",
-    imageUrl: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1200&q=80",
-    serviceId: "A1",
-  },
-  {
-    id: "p-finpulse",
-    categoryCode: "C",
-    categoryName: "Digital Experience",
-    title: "FinPulse — Cross-Platform Banking Ecosystem",
-    client: "FinPulse Global",
-    description: "42 high-fidelity mobile application screens, dark/light kinetic UI tokens, micro-interactions, and responsive web marketing platform.",
-    deliverables: ["Figma Component Library", "Next.js 16 Web Platform", "Interactive Lottie Animations"],
-    metrics: "99.8% customer design satisfaction score",
-    imageUrl: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=1200&q=80",
-    serviceId: "C1",
-  },
-  {
-    id: "p-neurosynth",
-    categoryCode: "F",
-    categoryName: "AI & 3D Kinetic",
-    title: "NeuroSynth — Generative 3D Spatial Audio Reveal",
-    client: "NeuroSynth Labs",
-    description: "60-second procedural 3D teaser video rendered in 4K ProRes with bespoke sonic identity and haptic soundscape chimes.",
-    deliverables: ["4K ProRes 4444 Master", "Dolby Atmos Spatial Audio", "Blender Procedural Project File"],
-    metrics: "1.4M views across tech launch announcement",
-    imageUrl: "https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?auto=format&fit=crop&w=1200&q=80",
-    serviceId: "F1",
-  },
-  {
-    id: "p-veloce",
+    id: "p-aurum",
     categoryCode: "B",
-    categoryName: "Visual Design",
-    title: "Veloce Atelier — Luxury Editorial Design & Packaging",
-    client: "Veloce Timepieces",
-    description: "Bespoke typography, luxury tactile unboxing packaging, custom foiled certificates of authenticity, and catalog art direction.",
-    deliverables: ["Die-Cut Vector Dielines", "Spot UV Foil Specs", "Print-Ready CMYK Masters"],
-    metrics: "Sold out initial 500-unit limited run in 72h",
-    imageUrl: "https://images.unsplash.com/photo-1524805444758-089113d48a6d?auto=format&fit=crop&w=1200&q=80",
-    serviceId: "B1",
+    categoryName: "Brand Identity & Development",
+    title: "Aurum Autonomous — Complete Brand Identity System",
+    client: "Aurum Robotics Corp",
+    description:
+      "Mathematical monogram architecture, embossed obsidian stationery suite, typography specifications, and comprehensive brand book for a Series-A robotics company.",
+    deliverables: ["Vector Master SVG & AI", "Brand Guidelines Book", "Stationery & Executive Kit"],
+    metrics: "4.8x increase in Series-A pitch visual confidence",
+    imageUrl: "/images/portfolio/brand-identity.jpg",
+    serviceId: "B02",
   },
   {
-    id: "p-omnichannel",
+    id: "p-motion-aura",
+    categoryCode: "C",
+    categoryName: "Video Production, Editing & Motion Graphics",
+    title: "Motion Aura — 4K Kinetic Brand Film & 3D Sequence",
+    client: "Kinetic Interactive Labs",
+    description:
+      "Full 4K commercial edit, metallic gold 3D animated typography sequences, broadcast color grading, and multi-aspect vertical/widescreen delivery cutdowns.",
+    deliverables: ["4K ProRes & MP4 Master", "After Effects Source", "9:16 & 16:9 Cutdowns"],
+    metrics: "1.4M organic launch views in first 14 days",
+    imageUrl: "/images/portfolio/video-motion.jpg",
+    serviceId: "C05",
+  },
+  {
+    id: "p-aetheria",
+    categoryCode: "F",
+    categoryName: "Digital & AI-Powered Creative Production",
+    title: "Aetheria Spatial — AI-Assisted Hardware Film & Stills",
+    client: "Aetheria Audio Systems",
+    description:
+      "AI-assisted generative storyboard pipeline combined with studio-grade retouching and dynamic hardware video reveal sequences for a global hardware reveal.",
+    deliverables: ["8K Generative Product Stills", "AI Video Reveal Sequences", "Layered Retouch PSD"],
+    metrics: "2,400 pre-order units reserved within 48 hours",
+    imageUrl: "/images/portfolio/ai-creative.jpg",
+    serviceId: "F02",
+  },
+  {
+    id: "p-aura-nocturne",
+    categoryCode: "A",
+    categoryName: "Graphic Design & Visual Communication",
+    title: "Aura Nocturne — Tactile Luxury Packaging & Crest Graphics",
+    client: "Aura Nocturne Fragrance House",
+    description:
+      "Custom geometric emblem, matte rigid unboxing structural dielines, hot-foil stamping specs, and print-ready CMYK pre-press packaging masters.",
+    deliverables: ["Die-Cut Vector Dielines", "Foil & Spot UV Specs", "Print-Ready CMYK Masters"],
+    metrics: "500-unit limited first run sold out in 72 hours",
+    imageUrl: "/images/portfolio/luxury-packaging.jpg",
+    serviceId: "A09",
+  },
+  {
+    id: "p-monolith-ads",
     categoryCode: "E",
-    categoryName: "Advertising & Marketing",
-    title: "Kinetix Performance — Global Product Drop Campaign",
-    client: "Kinetix Athletics",
-    description: "High-converting multi-format social ad suites across Meta, TikTok, and Google Display Network with animated kinetic type.",
-    deliverables: ["16 Ad Aspect Variations", "High-FPS MP4 Motion Stems", "Static Display Banners"],
-    metrics: "+42% ROAS over previous agency baseline",
-    imageUrl: "https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=1200&q=80",
-    serviceId: "E1",
+    categoryName: "Advertising & Marketing Creative",
+    title: "Monolith Drop — High-Converting Paid Advertising Matrix",
+    client: "Monolith Performance Wear",
+    description:
+      "Performance acquisition ad suite engineered for Meta, Instagram, Google Display Network, and retargeting funnels with high-contrast architectural lighting.",
+    deliverables: ["16 Ad Aspect Variations", "Static & Motion Ad Stems", "A/B Hook Creative Pack"],
+    metrics: "+42% ROAS uplift over previous agency baseline",
+    imageUrl: "/images/portfolio/ad-campaign.jpg",
+    serviceId: "E01",
   },
   {
-    id: "p-synthetix",
+    id: "p-arcturus",
     categoryCode: "G",
-    categoryName: "Corporate Communication",
-    title: "Synthetix Capital — Series-B Investor Master Deck",
-    client: "Synthetix Ventures",
-    description: "Interactive executive pitch presentation, custom financial data visualization charts, and editable Keynote/Figma tokens.",
-    deliverables: ["Editable Keynote / PPTX", "Vector Chart Assets", "Executive Leave-Behind PDF"],
-    metrics: "$24M institutional capital secured",
-    imageUrl: "https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=1200&q=80",
-    serviceId: "G1",
+    categoryName: "Corporate & Business Communication",
+    title: "Arcturus Holdings — Executive Investor Deck & Annual Report",
+    client: "Arcturus Capital Partners",
+    description:
+      "28-slide executive investor pitch deck and hardcover annual report system with custom financial data visualization charts in champagne gold and obsidian.",
+    deliverables: ["Editable Keynote / PPTX", "Vector Financial Charts", "Executive Print & PDF"],
+    metrics: "$24M institutional capital committed post-roadshow",
+    imageUrl: "/images/portfolio/corporate-deck.jpg",
+    serviceId: "G03",
   },
 ];
 
@@ -110,23 +116,24 @@ export default function PortfolioPage() {
           {/* Header */}
           <div className="space-y-4 max-w-3xl">
             <span className="badge-mono text-brand-highlight">Excellence in Production</span>
-            <h1 className="text-4xl sm:text-6xl font-bold tracking-tight text-brand-light">
+            <h1 className="text-4xl sm:text-6xl font-bold tracking-tight text-brand-light text-balance">
               Crafted for Commercial Impact.
             </h1>
             <p className="text-base sm:text-lg text-brand-muted leading-relaxed">
-              Explore recent production milestones engineered at Freakin&apos;s Studio. Every project is backed by our
-              canonical 60-service catalog, rigorous quality assurance, and commercial buyout licensing.
+              Explore recent production milestones delivered at Freakin&apos;s Studio. Every project maps directly to our
+              canonical 60-service catalog, structured proofing rounds, and perpetual commercial buyout licensing.
             </p>
             <div className="pt-2 flex flex-wrap gap-3">
               <Button
                 render={<Link href="/builder">Launch Package Builder &rarr;</Link>}
                 size="lg"
-                className="cyber-glow"
+                className="cyber-glow bg-brand-highlight hover:bg-brand-highlight/90 text-brand-black font-semibold font-mono text-sm"
               />
               <Button
                 render={<Link href="/case-studies">Read Deep-Dive Case Studies</Link>}
                 size="lg"
                 variant="outline"
+                className="font-mono text-sm border-brand-border text-brand-light"
               />
             </div>
           </div>
@@ -136,72 +143,62 @@ export default function PortfolioPage() {
             {PORTFOLIO_PROJECTS.map((proj) => (
               <div
                 key={proj.id}
-                className="group flex flex-col justify-between rounded-xl border border-brand-border bg-brand-surface/40 overflow-hidden hover:border-brand-highlight/40 transition-all duration-300"
+                className="group flex flex-col justify-between rounded-xl border border-brand-border bg-brand-surface/40 overflow-hidden hover:border-brand-highlight/40 transition-colors duration-200"
               >
                 <div>
-                  {/* Image banner */}
-                  <div className="relative h-56 w-full overflow-hidden bg-brand-border/30">
-                    <img
+                  <div className="relative h-56 w-full overflow-hidden bg-brand-surface">
+                    <ShowcaseImage
                       src={proj.imageUrl}
                       alt={proj.title}
-                      className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                      loading="lazy"
+                      caption={proj.title}
+                      className="object-cover transition-transform duration-500 group-hover:scale-105"
                     />
-                    <div className="absolute top-3 left-3 flex gap-2">
-                      <Badge variant="outline" className="badge-mono bg-brand-black/80 backdrop-blur-sm border-brand-border text-brand-light">
-                        Cat {proj.categoryCode} &bull; {proj.categoryName}
-                      </Badge>
-                    </div>
                   </div>
 
                   {/* Body */}
                   <div className="p-6 space-y-4">
-                    <div className="space-y-1">
-                      <span className="text-xs font-mono text-brand-highlight">{proj.client}</span>
+                    <div className="space-y-1.5">
+                      <p className="text-xs font-mono text-brand-muted">
+                        Cat {proj.categoryCode} · {proj.categoryName}
+                      </p>
                       <h3 className="text-lg font-bold text-brand-light group-hover:text-brand-highlight transition-colors">
                         {proj.title}
                       </h3>
+                      <p className="text-xs font-mono text-brand-highlight">{proj.client}</p>
                     </div>
 
                     <p className="text-xs text-brand-muted leading-relaxed">
                       {proj.description}
                     </p>
 
-                    {/* Deliverables tags */}
-                    <div className="space-y-1.5 pt-2">
-                      <span className="text-[10px] font-mono uppercase text-brand-muted">Included Deliverables:</span>
-                      <div className="flex flex-wrap gap-1.5">
-                        {proj.deliverables.map((deliv, idx) => (
-                          <span
-                            key={idx}
-                            className="text-[10px] font-mono px-2 py-0.5 rounded bg-brand-border/40 text-brand-light"
-                          >
-                            {deliv}
-                          </span>
-                        ))}
-                      </div>
+                    <div className="space-y-1 pt-2 border-t border-brand-border/50">
+                      <span className="text-[10px] font-mono uppercase text-brand-muted block">
+                        Deliverables Included
+                      </span>
+                      <p className="text-xs font-mono text-brand-light/90">
+                        {proj.deliverables.join(" · ")}
+                      </p>
                     </div>
 
-                    {/* Metric badge */}
-                    <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-xs font-mono text-emerald-400">
-                      &bull; Outcome: {proj.metrics}
-                    </div>
+                    <p className="text-xs font-mono text-emerald-400 pt-1">
+                      Outcome: {proj.metrics}
+                    </p>
                   </div>
                 </div>
 
                 {/* Footer action */}
-                <div className="p-6 pt-0 border-t border-brand-border/40 mt-4 flex items-center justify-between">
+                <div className="px-6 py-4 border-t border-brand-border/60 flex items-center justify-between gap-2">
                   <Link
                     href={`/services/${proj.serviceId}`}
-                    className="text-xs font-mono text-brand-muted hover:text-brand-light transition-colors"
+                    className="text-xs font-mono text-brand-muted hover:text-brand-light transition-colors whitespace-nowrap"
                   >
-                    View Service ({proj.serviceId}) &rarr;
+                    Service {proj.serviceId} &rarr;
                   </Link>
                   <Button
                     render={<Link href={`/builder?service=${proj.serviceId}`}>Configure Scope</Link>}
                     size="sm"
                     variant="outline"
-                    className="h-8 text-xs font-mono"
+                    className="h-8 text-xs font-mono border-brand-border text-brand-light whitespace-nowrap"
                   />
                 </div>
               </div>
@@ -210,7 +207,7 @@ export default function PortfolioPage() {
 
           {/* Bottom Banner */}
           <div className="rounded-2xl border border-brand-border bg-gradient-to-r from-brand-surface to-brand-border/30 p-8 sm:p-12 text-center space-y-4">
-            <h2 className="text-2xl sm:text-4xl font-bold text-brand-light">
+            <h2 className="text-2xl sm:text-4xl font-bold text-brand-light text-balance">
               Ready to elevate your commercial identity?
             </h2>
             <p className="text-sm text-brand-muted max-w-xl mx-auto">
@@ -221,7 +218,7 @@ export default function PortfolioPage() {
               <Button
                 render={<Link href="/builder">Build Your Custom Creative Package</Link>}
                 size="lg"
-                className="cyber-glow"
+                className="cyber-glow bg-brand-highlight hover:bg-brand-highlight/90 text-brand-black font-semibold font-mono text-sm"
               />
             </div>
           </div>

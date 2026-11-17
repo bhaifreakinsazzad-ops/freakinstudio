@@ -21,7 +21,7 @@ const FAQS: FAQItem[] = [
   {
     category: "Services & Scope",
     q: "How many creative services do you offer?",
-    a: "Freakin's Studio maintains a strict canonical catalog of exactly 60 services organized across seven specialized disciplines: Identity Systems (A), Visual Design (B), Digital Experience (C), Content & Media (D), Advertising (E), AI-Powered & 3D (F), and Corporate Communications (G).",
+    a: "Freakin's Studio maintains a strict canonical catalog of exactly 60 services organized across seven specialized disciplines: Graphic Design & Visual Communication (A), Brand Identity & Development (B), Video Production, Editing & Motion Graphics (C), Social Media & Digital Content (D), Advertising & Marketing Creative (E), Digital & AI-Powered Creative Production (F), and Corporate & Business Communication (G).",
   },
   {
     category: "Services & Scope",
@@ -41,7 +41,7 @@ const FAQS: FAQItem[] = [
   {
     category: "Pricing & Payments",
     q: "What payment methods are supported?",
-    a: "We natively support dual currencies: Bangladeshi Taka (BDT) via bKash Merchant Pay and international payments in US Dollars (USD) via Stripe Card Checkout.",
+    a: "We natively support dual currencies: Bangladeshi Taka (BDT) via SSLCOMMERZ Hosted Checkout (bKash, Nagad, Rocket & local cards) and international payments in US Dollars (USD) via Stripe Card Checkout.",
   },
   {
     category: "Pricing & Payments",
@@ -109,8 +109,7 @@ export default function FAQPage() {
               const items = FAQS.filter((f) => f.category === cat);
               return (
                 <div key={cat} className="space-y-6">
-                  <div className="flex items-center gap-3 border-b border-brand-border/60 pb-3">
-                    <span className="w-2 h-2 rounded-full bg-brand-highlight" />
+                  <div className="border-b border-brand-border/60 pb-3">
                     <h2 className="font-mono text-sm font-bold uppercase tracking-wider text-brand-light">
                       {cat}
                     </h2>

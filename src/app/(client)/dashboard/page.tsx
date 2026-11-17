@@ -10,7 +10,17 @@ export const metadata: Metadata = {
 
 export const instant = false;
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{
+    payment?: string;
+    tran_id?: string;
+    session_id?: string;
+    error?: string;
+  }>;
+}) {
+  const { payment, tran_id, session_id, error } = await searchParams;
   const profile = await getCurrentProfile();
   const supabase = await createClient();
 
@@ -38,6 +48,9 @@ export default async function DashboardPage() {
       projects={projects || []}
       quotes={quotes || []}
       orders={orders || []}
+      paymentStatus={payment}
+      transactionRef={tran_id || session_id}
+      noticeError={error}
     />
   );
 }
