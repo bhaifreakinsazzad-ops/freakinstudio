@@ -1,0 +1,53 @@
+Priority,Existing_Source,Disposition,Target_or_Workstream,Action,Reference_or_Acceptance
+P0,AGENTS.md,KEEP,Next.js 16 API guidance,"Read installed Next docs before coding; preserve repo conventions",No stale API usage
+P0,CLAUDE.md,MODIFY,docs/PROJECT_CONTRACT.md,"Replace 60/7 business authority with 4/13/15/5/14; retain historical note",Owner canon wins
+P0,README.md,MODIFY,docs/README_NEXT.md,"Correct status/startup/database/service counts",Matches actual deployment state
+P0,PROJECT_BRIEF.md,ARCHIVE,docs/history/,"Retain original history not current source of truth",No obsolete requirements treated as active
+P0,src/app/(marketing)/page.tsx,REDESIGN,Public Home / Intent Canvas,"Remove invented outcomes and 60 services; port approved prototype",Honest work / real CTAs
+P0,src/app/(marketing)/portfolio/page.tsx,REPLACE,Concept Portfolio,"Show approved Concept Study labels; remove fake performance numbers",No fabricated metrics
+P0,src/app/(marketing)/case-studies/page.tsx,REPLACE,Works / Verified case studies only,"Remove invented testimonials and fundraising/sales outcomes",No fake endorsements
+P0,src/app/(marketing)/contact/page.tsx,MODIFY,Studio Contact,"Use confirmed official contact channels only",WhatsApp and email match owner
+P0,src/app/api/contact/route.ts,FIX,Real inquiries API,"Persist first; fail on DB failure; add rate limit and notification",No false success
+P0,src/lib/catalog/index.ts,REPLACE,CatalogRepository,"Remove 60/7/283 legacy fallbacks; versioned approved source",13 services / 15 variants / 5 kits / 14 add-ons
+P0,supabase/seed/data/*.json,ARCHIVE,Historical legacy reference,"No longer active runtime canonical; preserve legacy historical data",Archived with mapping
+P0,scripts/seed-services.ts,REPLACE,Versioned catalog import,"Remove count===60 assertion; idempotent FK-safe migration",13 core services current
+P0,supabase/migrations/20261109000006_catalog.sql,KEEP,Migration history,"Never retroactively edit; create new forward migration",Historical records preserved
+P0,supabase/migrations/20261109000009_packages_quotes_orders.sql,AUDIT,Schema+RLS,"Verify staging application and FK constraints and approval metadata",No assumptions about live state
+P0,supabase/migrations/20261109000010_trusted_transactions.sql,AUDIT,Trusted RPC,"Verify stage deployment; refactor for hours, approved rates, idempotency",Quote totals server-derived
+P0,src/lib/pricing/engine.ts,REPLACE,Hourly pricing engine,"Remove default +35% rush; implement hourly scoped pricebook",Correct BDT/USD and 5% window
+P0,src/app/(marketing)/services/[id]/page.tsx,MODIFY,Service Lens,"Hourly scope + delivery milestone + terms",No x1.35
+P0,src/app/api/pricing/quote/route.ts,FIX,Server-side pricing API,"Validate input with Zod and server versioned canonical pricebook",No client price authority
+P0,src/app/(admin)/admin/page.tsx,FIX,Studio Dashboard,"Remove fallback paid orders/quotes/fake project records",True empty/error states
+P0,src/app/(client)/dashboard/projects/[id]/page.tsx,FIX,Client Project Detail,"Return 404 for absent records; evaluate Draft PR #6",No synthetic project/asset
+P0,src/app/(client)/dashboard/page.tsx,MODIFY,Client Workspace,"Filter by owner and real tasks/events; evaluate Draft PR #6",No arbitrary progress
+P0,tests/unit/catalog.test.ts,REPLACE,Canonical counts tests,"Retire legacy 7/60/283/327 expectations",13/15/5/14 assertions
+P0,tests/unit/pricing-engine.test.ts,REPLACE,Hourly pricing tests,"Replace 35% rush tests with hours/discount/boundary/caps",Correct decimals/timezone
+P0,src/lib/i18n/context.tsx,MODIFY,BN/EN language system,"Remove Services 60 and rush+35 labels; preserve localization",No stale translations
+P1,src/components/ui/BrandLogo.tsx,MODIFY,Official Logo component,"Render approved master logo/safe fallback not old triangle",Matches Brand Book
+P1,src/lib/designTokens.ts,MODIFY,Brand system,"Reconcile official palette/typography and frontend prototype",Consistent tokens
+P1,src/app/globals.css,MODIFY,Theme and responsive CSS,"Port approved design tokens; Motion/3D progressive enhancement",360/390/1440 parity
+P1,src/components/layout/navbar.tsx,MODIFY,Public navigation,"Tools / Services / Start / Track / Account",No dead CTAs
+P1,src/components/layout/footer.tsx,MODIFY,Public footer,"Catalog counts and contacts verified",Owner contact only
+P1,src/app/(marketing)/services/services-catalog-client.tsx,REDESIGN,Interactive Catalog,"13 services and variants, value previews, fees and scope",Usable mobile filters
+P1,src/app/(marketing)/builder/package-builder-client.tsx,REWORK,Intent-to-brief flow,"Replace seven-step legacy checkout with selected prototype flow",Typed states/auth modes
+P1,src/app/(marketing)/builder/actions.ts,REWORK,Request/quote creation,"No unapproved direct checkout; server-authoritative hour estimate",Requires real RPC
+P2,src/app/(client)/dashboard/projects/[id]/project-workspace-client.tsx,REUSE+HARDEN,Client proofing,"Integrate real assets, event history, revision count and private preview",Two-tenant tests
+P2,src/app/(client)/dashboard/projects/[id]/actions.ts,REUSE+HARDEN,Project transitions,"Atomic transitions with audit event and ownership validation",No free string status change
+P2,src/app/(admin)/admin/admin-console-client.tsx,REUSE+REDESIGN,Manual Studio Ops,"Manual task assignment, quote, proof, review, SI approvals",No fabricated data
+P2,src/app/(admin)/admin/actions.ts,HARDEN,Authorized Studio actions,"Explicit state machine and transactional project_events",Audit trail
+P2,src/app/api/projects/[id]/download/route.ts,REUSE+HARDEN,Private asset delivery,"Storage policies, signed URLs or streaming, payment/scope authorization",Cannot cross tenant
+P2,src/lib/supabase/middleware.ts,KEEP+AUDIT,Session cookie refresh,"Do not use as sole authorization layer",Server actions verify identities
+P2,src/proxy.ts,KEEP+AUDIT,Next Proxy,"Preserve matcher compatibility with actual routes",No auth bypass
+P2,src/lib/supabase/privileged.ts,KEEP+AUDIT,Secret server operations,"Never bundle service_role in client; fail closed",No public token leak
+P2,src/lib/payments/*,KEEP+HARDEN,Payments adapters,"Revalidate merchant integration / webhook authenticity / amount",Idempotent settlement
+P2,src/app/api/payments/*,KEEP+HARDEN,Verified payment callbacks,"No direct payment success from browser redirects",One charge one entitlement
+P2,src/app/(auth)/*,KEEP+REDESIGN,Auth screens,"Preserve Supabase auth; apply prototype visuals without losing security",Guest still uses free tools
+P3,NEW src/features/local-tools/,ADD,Browser-native utilities,"Image resize/compress/palette/contrast/brief export",Runs offline without login
+P4,NEW src/app/api/ai/*,ADD,Guest AI gateway,"Puter owner-context adapter; caps, signing, safety and ledger",No Puter login or browser token
+P4,NEW src/features/ai-products/,ADD,Micro-products C+D,"3 exact SKUs; event/cost/credit ledgers",No phantom purchases
+P5,NEW src/features/project-events/,ADD,Event-backed progress,"Persist actor/time/milestone, render truthful client timeline",Client and admin share state
+P5,NEW src/features/si-operations/,ADD,SI audit/approval,"Human-gated SI job orchestration",No fake SI activity
+P6,NEW src/app/manifest.ts + public/icon assets,ADD,PWA installability,"Use approved logo icons; public-only service worker cache",Private routes not cached
+P6,tests/e2e/commerce.spec.ts,REWRITE,Real user flows,"No legacy builder phrasing; multi-role e2e journeys",Screenshots and traces
+P6,tests/integration/*,EXTEND,RLS/payment storage tests,"Anon/clientA/clientB/staff/admin isolation",Real staging fixture only
+P6,docs/*,RECONCILE,Truthful release documents,"Eliminate contradictory 009/010 claims, stale pass counts",Measured verification only

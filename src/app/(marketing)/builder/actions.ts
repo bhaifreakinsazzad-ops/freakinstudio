@@ -402,3 +402,77 @@ export async function createOrderFromBuilderAction(
     return { ok: false, error: message };
   }
 }
+
+export async function submitPackageAction(input: {
+  serviceIds: string[];
+  serviceConfigs: PackageDraft["serviceConfigs"];
+  selectedAddOns: PackageDraft["selectedAddOns"];
+  brief: {
+    brandName: string;
+    objective: string;
+    audience: string;
+    platforms: string;
+  };
+  currency: "BDT" | "USD";
+  gateway: "sslcommerz" | "stripe" | "manual_bank";
+  intent: "checkout" | "quote";
+}): Promise<{
+  ok: boolean;
+  requiresAuth?: boolean;
+  error?: string;
+  redirectUrl?: string;
+  quoteRef?: string;
+  orderRef?: string;
+}> {
+  const [catalogServices, catalogAddOns] = await Promise.all([
+    getCatalogServices(),
+    getAllAddOns(),
+  ]);
+  const pricing = calculatePricingSummary({
+    serviceIds: input.serviceIds,
+    serviceConfigs: input.serviceConfigs,
+    selectedAddOns: input.selectedAddOns,
+    currency: input.currency,
+    catalogServices,
+    catalogAddOns,
+    policy: APPROVED_ENTERPRISE_POLICY,
+  });
+
+  const draft: PackageDraft = {
+    id: crypto.randomUUID(),
+    savedAt: new Date().toISOString(),
+    objective: input.brief,
+    services: input.serviceIds,
+    serviceConfigs: input.serviceConfigs,
+    selectedAddOns: input.selectedAddOns,
+    pricing,
+  };
+
+  if (input.intent === "quote" || pricing.quoteRequired) {
+    const res = await requestQuoteAction(draft);
+    return {
+      ok: res.ok,
+      requiresAuth: res.requiresAuth,
+      error: res.error || res.message,
+      quoteRef: res.quoteRef,
+      redirectUrl: res.ok ? "/dashboard" : undefined,
+    };
+  }
+
+  const mappedGateway =
+    input.gateway === "stripe"
+      ? "stripe"
+      : input.gateway === "sslcommerz"
+      ? "sslcommerz"
+      : "sandbox";
+
+  const orderRes = await createOrderFromBuilderAction(draft, mappedGateway);
+  return {
+    ok: orderRes.ok,
+    requiresAuth: orderRes.requiresAuth,
+    error: orderRes.error || orderRes.message,
+    orderRef: orderRes.orderRef,
+    redirectUrl: orderRes.redirectUrl,
+  };
+}
+

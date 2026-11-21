@@ -5,17 +5,19 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * Freakin's Studio brand tokens, ported from the legacy prototype
- * (reference/legacy/freakin_s_studio_creative_commerce_os.html).
- * See docs/LEGACY_AUDIT.md §8 for the source palette.
+ * Freakin's Studio — Official Brand Book v1.0 Tokens
+ * Obsidian: #090A0A
+ * Champagne Gold: #D9BD81
+ * Studio Ivory: #F6F4EF
+ * Graphite: #232528
  */
 @theme {
   --color-brand-black: #090a0a;
-  --color-brand-surface: #101212;
-  --color-brand-card: #171a18;
-  --color-brand-border: #2b302d;
-  --color-brand-muted: #aaa9a1;
-  --color-brand-light: #f1efe9;
+  --color-brand-surface: #121315;
+  --color-brand-card: #232528;
+  --color-brand-border: #2c2f33;
+  --color-brand-muted: #a8a6a0;
+  --color-brand-light: #f6f4ef;
   --color-brand-accent: #d9bd81;
   --color-brand-highlight: #d9bd81;
   --color-brand-success: #10b981;
@@ -67,12 +69,6 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-/*
- * Freakin's Studio is a forced-dark "cyberpunk SaaS ops console" product —
- * there is no light theme. :root and .dark both carry the brand palette so
- * shadcn components (which key off .dark via @custom-variant above) render
- * correctly regardless of which selector wins.
- */
 :root,
 .dark {
   --background: var(--color-brand-black);
@@ -126,15 +122,13 @@ html {
 }
 
 @layer utilities {
-  /* Frosted translucent container — signature Freakin's Studio surface. */
   .glass-panel,
   .glass-card {
-    background-color: color-mix(in srgb, var(--color-brand-card) 70%, transparent);
+    background-color: color-mix(in srgb, var(--color-brand-card) 72%, transparent);
     backdrop-filter: blur(16px);
     border: 1px solid var(--color-brand-border);
   }
 
-  /* Colored glow used sparingly on primary CTAs. */
   .cyber-glow {
     box-shadow: 0 0 24px -4px color-mix(in srgb, var(--color-brand-highlight) 55%, transparent);
   }
@@ -142,15 +136,13 @@ html {
     box-shadow: 0 0 24px -4px color-mix(in srgb, var(--color-brand-success) 55%, transparent);
   }
 
-  /* Mono, letter-spaced pill label for IDs/roles/statuses. */
   .badge-mono {
     font-family: var(--font-mono);
-    letter-spacing: 0.05em;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
     font-size: 0.6875rem;
   }
 
-  /* Thin dark scrollbar, applied globally via <body className="cyber-scrollbar">. */
   .cyber-scrollbar {
     scrollbar-width: thin;
     scrollbar-color: var(--color-brand-border) transparent;

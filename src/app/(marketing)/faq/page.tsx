@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = {
   title: "Frequently Asked Questions — Freakin's Studio",
-  description: "Clear answers on pricing, turnaround times, commercial buyout licensing, revision limits, and payment methods.",
+  description:
+    "Clear answers on our 13 core services, hourly scoped pricing, 5% launch promotion, 10-minute express rules, and 2 consolidated revisions.",
 };
 
 export const instant = false;
@@ -14,74 +15,58 @@ export const instant = false;
 interface FAQItem {
   q: string;
   a: string;
-  category: "Services & Scope" | "Pricing & Payments" | "Revisions & Proofing" | "Licensing & Handover";
+  category:
+    | "Services & Scope"
+    | "Pricing & Payments"
+    | "Revisions & Proofing"
+    | "Licensing & Handover";
 }
 
 const FAQS: FAQItem[] = [
   {
     category: "Services & Scope",
     q: "How many creative services do you offer?",
-    a: "Freakin's Studio maintains a strict canonical catalog of exactly 60 services organized across seven specialized disciplines: Graphic Design & Visual Communication (A), Brand Identity & Development (B), Video Production, Editing & Motion Graphics (C), Social Media & Digital Content (D), Advertising & Marketing Creative (E), Digital & AI-Powered Creative Production (F), and Corporate & Business Communication (G).",
+    a: "Freakin's Studio maintains an approved canonical catalog of 13 core creative services organized across 4 disciplines: Brand & Visual Identity (DISC-01), Social Media & Campaign Creative (DISC-02), Commercial Graphic & Print Design (DISC-03), and Motion, Reels & Short-Form Video (DISC-04), supported by 15 scoped variants, 5 commercial bundles, and 14 compatible add-ons.",
   },
   {
     category: "Services & Scope",
-    q: "Can I bundle multiple services across different categories?",
-    a: "Yes. Our 7-step interactive Package Builder allows you to combine services from any discipline into a single unified sprint (e.g. Logo Identity + Next.js Marketing Web Platform + 3D Product Teaser Video).",
+    q: "What are the 5 Commercial Bundles?",
+    a: "We offer 5 multi-service production pods: Brand Launch Starter Pack (BND-01), Social Growth Monthly Pulse (BND-02), Performance Ad Campaign Pod (BND-03), Retail Packaging & Shelf Suite (BND-04), and Founder Pitch & Fundraising Kit (BND-05).",
   },
   {
     category: "Services & Scope",
-    q: "What companion add-ons are available?",
-    a: "Each service features tailored add-ons such as Editable Working Source Files, Extra Concept Variations, Expedited Review Sprints, Additional Platform Aspect Ratios, and Extended Commercial Buyouts.",
+    q: "What is the 10-Minute Express Delivery Rule?",
+    a: "10-Minute Express Delivery is strictly available for pre-checked single-file micro-edits on SRV-02 (Logo Vector Cleanup), SRV-05 (Social Single Post text/crop tweak), and SRV-13 (Motion end-slate update) when open working source files are ready and a live studio desk slot is confirmed.",
   },
   {
     category: "Pricing & Payments",
-    q: "How is pricing calculated?",
-    a: "Pricing is calculated authoritatively by our server pricing engine based on approved base rates, quantity bounds, companion add-ons, and delivery priority. This eliminates client-side price tampering.",
+    q: "How is hourly scoped pricing calculated?",
+    a: "Pricing is calculated authoritatively on our server from scoped hours (Base Service Hours × Scoped Variant Multiplier + Compatible Add-on Hours) multiplied by our canonical hourly rate (৳1,500 BDT/h or $15 USD/h).",
+  },
+  {
+    category: "Pricing & Payments",
+    q: "How does the 5% Launch Promotion work?",
+    a: "A 5% launch discount applies automatically once to eligible subtotals during our official launch window from 20 November 2026 to 15 December 2026 (Asia/Dhaka timezone, UTC+6).",
   },
   {
     category: "Pricing & Payments",
     q: "What payment methods are supported?",
-    a: "We natively support dual currencies: Bangladeshi Taka (BDT) via SSLCOMMERZ Hosted Checkout (bKash, Nagad, Rocket & local cards) and international payments in US Dollars (USD) via Stripe Card Checkout.",
-  },
-  {
-    category: "Pricing & Payments",
-    q: "When is a formal quotation required instead of instant checkout?",
-    a: "Self-service instant checkout is available for standard packages up to 5 services or ৳150,000 BDT / $1,250 USD. Orders exceeding these limits or involving custom enterprise scopes are routed to our Quote Desk for custom sprint planning.",
-  },
-  {
-    category: "Pricing & Payments",
-    q: "Do quotes expire?",
-    a: "Formal quotations issued by our production desk remain binding and valid for 14 calendar days from the moment of issue.",
+    a: "We natively support Bangladeshi Taka (BDT) via SSLCommerz (bKash, Nagad, local cards) and US Dollars (USD) via Stripe after server-verified webhook confirmation.",
   },
   {
     category: "Revisions & Proofing",
     q: "How many revision rounds are included?",
-    a: "Each service specifies an included revision quota (typically 2 to 5 rounds, with an average of 3 rounds per package). Our Client Workspace actively monitors used vs. remaining rounds.",
+    a: "Every service and commercial bundle includes 2 consolidated revision rounds. Additional revision rounds can be added via ADD-04 (+1.5h scoped).",
   },
   {
     category: "Revisions & Proofing",
-    q: "How does visual proofing work?",
-    a: "Our Client Workspace features an interactive canvas proofing tool. You click directly on the draft image or video preview to place feedback pins at exact relative coordinates (X%, Y%) and leave precise notes.",
-  },
-  {
-    category: "Revisions & Proofing",
-    q: "What happens if I need revisions beyond the included quota?",
-    a: "Additional revision sprints can be requested directly in the workspace at standard studio rates (৳6,000 BDT or $50 USD per sprint) without interrupting active production.",
+    q: "How does visual proofing and Human + SI governance work?",
+    a: "Our Client Office features an interactive coordinate pin proofing canvas. SI Assistants can help organize feedback checklists and timeline drafts, while Human Creative Leads review and approve all final creative work, pricing, and delivery.",
   },
   {
     category: "Licensing & Handover",
     q: "Do I own the final deliverables?",
-    a: "Yes, 100%. Upon full payment and project approval, Freakin's Studio irrevocably transfers all worldwide commercial rights to you under our Commercial Buyout & Licensing Agreement.",
-  },
-  {
-    category: "Licensing & Handover",
-    q: "Are source files included?",
-    a: "Yes. Every approved project generates a real ZIP binary archive containing vector SVGs, high-resolution renders, technical specs JSON, delivery manifests, and commercial buyout licenses.",
-  },
-  {
-    category: "Services & Scope",
-    q: "What is Rush Delivery (+35%)?",
-    a: "Rush Delivery reserves dedicated senior specialists and expedites turnaround times by 40–50% (often within 24–48 hours for standard sprints) for a 35% priority surcharge.",
+    a: "Yes. Upon full payment settlement and final project approval, Freakin's Studio transfers commercial usage rights for the agreed deliverables.",
   },
 ];
 
@@ -89,28 +74,34 @@ export default function FAQPage() {
   return (
     <>
       <Navbar />
-      <main className="flex-1 py-16 px-4 sm:px-6">
+      <main className="flex-1 py-16 px-4 sm:px-6 bg-[#090A0A]">
         <div className="mx-auto max-w-4xl space-y-16">
-          {/* Header */}
           <div className="space-y-4 max-w-3xl">
-            <span className="badge-mono text-brand-highlight">Frequently Asked Questions</span>
-            <h1 className="text-4xl sm:text-6xl font-bold tracking-tight text-brand-light">
-              Everything You Need to Know.
+            <span className="badge-mono text-[#D9BD81]">
+              Frequently Asked Questions
+            </span>
+            <h1 className="text-4xl sm:text-6xl font-bold tracking-tight text-[#F6F4EF]">
+              Transparent Studio Governance.
             </h1>
-            <p className="text-base sm:text-lg text-brand-muted leading-relaxed">
-              Transparent answers regarding our creative production standards, pricing integrity,
-              revision governance, and commercial buyout terms.
+            <p className="text-base sm:text-lg text-[#F6F4EF]/70 leading-relaxed">
+              Clear answers regarding our 13 core services, hourly scoped
+              pricing, 5% launch promo window, 10-minute express micro-edit
+              rules, and 2 consolidated revisions.
             </p>
           </div>
 
-          {/* Categorized FAQs */}
           <div className="space-y-12">
-            {["Services & Scope", "Pricing & Payments", "Revisions & Proofing", "Licensing & Handover"].map((cat) => {
+            {[
+              "Services & Scope",
+              "Pricing & Payments",
+              "Revisions & Proofing",
+              "Licensing & Handover",
+            ].map((cat) => {
               const items = FAQS.filter((f) => f.category === cat);
               return (
                 <div key={cat} className="space-y-6">
-                  <div className="border-b border-brand-border/60 pb-3">
-                    <h2 className="font-mono text-sm font-bold uppercase tracking-wider text-brand-light">
+                  <div className="border-b border-[#232528] pb-3">
+                    <h2 className="font-mono text-sm font-bold uppercase tracking-wider text-[#D9BD81]">
                       {cat}
                     </h2>
                   </div>
@@ -119,12 +110,12 @@ export default function FAQPage() {
                     {items.map((item, idx) => (
                       <div
                         key={idx}
-                        className="rounded-xl border border-brand-border bg-brand-surface/30 p-6 space-y-2 hover:border-brand-highlight/30 transition-colors"
+                        className="rounded-xl border border-[#232528] bg-[#121315] p-6 space-y-2 hover:border-[#D9BD81]/40 transition-colors"
                       >
-                        <h3 className="text-base font-bold text-brand-light">
+                        <h3 className="text-base font-bold text-[#F6F4EF]">
                           {item.q}
                         </h3>
-                        <p className="text-xs sm:text-sm text-brand-muted leading-relaxed">
+                        <p className="text-xs sm:text-sm text-[#F6F4EF]/75 leading-relaxed">
                           {item.a}
                         </p>
                       </div>
@@ -135,24 +126,25 @@ export default function FAQPage() {
             })}
           </div>
 
-          {/* Direct CTA */}
-          <div className="rounded-2xl border border-brand-border bg-gradient-to-r from-brand-surface to-brand-border/30 p-8 text-center space-y-4">
-            <h3 className="text-xl sm:text-2xl font-bold text-brand-light">
+          <div className="rounded-2xl border border-[#232528] bg-[#121315] p-8 text-center space-y-4">
+            <h3 className="text-xl sm:text-2xl font-bold text-[#F6F4EF]">
               Have a question not listed here?
             </h3>
-            <p className="text-xs sm:text-sm text-brand-muted max-w-xl mx-auto">
-              Contact our production desk directly or configure your custom scope in our interactive builder.
+            <p className="text-xs sm:text-sm text-[#F6F4EF]/70 max-w-xl mx-auto">
+              Message our official WhatsApp desk (+8801778307704) or configure
+              your custom scope in the Smart Brief Builder.
             </p>
             <div className="pt-2 flex flex-wrap justify-center gap-3">
               <Button
-                render={<Link href="/contact">Speak with Production Desk</Link>}
+                render={<Link href="/contact">Contact Studio Desk</Link>}
                 size="lg"
                 variant="outline"
+                className="border-[#232528] text-[#F6F4EF] font-mono text-xs"
               />
               <Button
-                render={<Link href="/builder">Launch Package Builder</Link>}
+                render={<Link href="/builder">Launch Smart Brief</Link>}
                 size="lg"
-                className="cyber-glow"
+                className="cyber-glow bg-[#D9BD81] text-[#090A0A] font-semibold font-mono text-xs"
               />
             </div>
           </div>

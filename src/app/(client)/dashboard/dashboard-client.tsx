@@ -2,413 +2,372 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import type { Profile } from "@/types/domain";
-import { Badge } from "@/components/ui/badge";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-
-export interface ClientProject {
-  id: string;
-  title: string;
-  status: string;
-  revisions_used: number;
-  max_revisions: number;
-  created_at: string;
-}
-
-export interface ClientQuote {
-  id: string;
-  quote_ref: string;
-  status: string;
-  currency: string;
-  amount_bdt: number;
-  amount_usd: number;
-  expires_at: string;
-  created_at: string;
-}
-
-export interface ClientOrder {
-  id: string;
-  order_ref: string;
-  payment_status: string;
-  currency: string;
-  amount_bdt: number;
-  amount_usd: number;
-  created_at: string;
-  scope_snapshot?: unknown;
-}
+import { acceptQuoteAndCheckoutAction } from "../actions";
+import { CreativeOfficeOS } from "@/features/creative-office/creative-office-os";
+import type {
+  ClientProjectSummary,
+  ClientOrderSummary,
+  ClientQuoteSummary,
+} from "./page";
+import type { PaymentGateway } from "@/types/domain";
 
 interface DashboardClientProps {
-  profile: Profile | null;
-  projects: ClientProject[];
-  quotes: ClientQuote[];
-  orders: ClientOrder[];
-  paymentStatus?: string;
-  transactionRef?: string;
-  noticeError?: string;
+  userEmail: string;
+  projects: ClientProjectSummary[];
+  orders: ClientOrderSummary[];
+  quotes: ClientQuoteSummary[];
 }
 
 export function DashboardClient({
-  profile,
+  userEmail,
   projects,
-  quotes,
   orders,
-  paymentStatus,
-  transactionRef,
-  noticeError,
+  quotes,
 }: DashboardClientProps) {
-  const [selectedInvoice, setSelectedInvoice] = useState<ClientOrder | null>(null);
-  const [dismissedBanner, setDismissedBanner] = useState(false);
+  const router = useRouter();
+  const [activeTab, setActiveTab] = useState<
+    "projects" | "orders" | "quotes" | "demo_office"
+  >(projects.length > 0 ? "projects" : "demo_office");
+  const [processingQuoteId, setProcessingQuoteId] = useState<string | null>(
+    null
+  );
+  const [selectedGateway, setSelectedGateway] =
+    useState<PaymentGateway>("sslcommerz");
+
+  const handleAcceptQuote = async (quoteId: string) => {
+    setProcessingQuoteId(quoteId);
+    try {
+      const res = await acceptQuoteAndCheckoutAction(quoteId, selectedGateway);
+      if (!res.ok) {
+        toast.error(res.error || "Unable to accept quotation");
+        return;
+      }
+      toast.success("Quotation accepted! Redirecting to payment checkout...");
+      if (res.redirectUrl) {
+        router.push(res.redirectUrl);
+      } else {
+        router.refresh();
+      }
+    } catch {
+      toast.error("Failed to initiate quote payment");
+    } finally {
+      setProcessingQuoteId(null);
+    }
+  };
 
   return (
-    <div className="space-y-10">
-      {/* Payment Settlement or Access Notice Banner */}
-      {!dismissedBanner && (paymentStatus === "success" || noticeError) && (
-        <div
-          className={`p-4 rounded-2xl border flex items-start justify-between gap-4 text-xs font-mono ${
-            paymentStatus === "success"
-              ? "border-emerald-500/40 bg-emerald-500/10"
-              : "border-amber-500/40 bg-amber-500/10"
-          }`}
-        >
-          <div className="space-y-1">
-            <span
-              className={`font-bold uppercase block ${
-                paymentStatus === "success" ? "text-emerald-400" : "text-amber-400"
-              }`}
-            >
-              {paymentStatus === "success"
-                ? "Payment Verified & Workspace Provisioned"
-                : "Workspace Access Notice"}
-            </span>
-            <p className="text-brand-light">
-              {paymentStatus === "success"
-                ? `Settlement confirmed${transactionRef ? ` (Ref: ${transactionRef})` : ""}. Complete your project onboarding brief below to start studio production.`
-                : noticeError === "admin_access_required"
-                ? "Studio Admin OS is restricted to studio administrators. You have been routed to your client workspace."
-                : noticeError}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => setDismissedBanner(true)}
-            className="text-brand-muted hover:text-brand-light px-2 py-1"
-            aria-label="Dismiss notice"
-          >
-            ✕
-          </button>
-        </div>
-      )}
-
-      {/* Top Banner & Quick Metrics */}
-      <div className="glass-panel p-6 sm:p-8 rounded-3xl border border-brand-border space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="space-y-1">
-            <span className="badge-mono text-brand-highlight">
-              Client Operating Workspace
-            </span>
-            <h1 className="text-2xl sm:text-3xl font-black text-brand-light tracking-tight">
-              Welcome back, {profile?.full_name || profile?.email}
-            </h1>
-            <p className="text-xs font-mono text-brand-muted">
-              Role: <strong className="text-brand-light uppercase">{profile?.role}</strong> • Organization: Freakin&apos;s Studio Client
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Button
-              render={<Link href="/builder">Launch Package Builder</Link>}
-              className="cyber-glow bg-brand-highlight hover:bg-brand-highlight/90 text-brand-black font-semibold font-mono text-xs px-5"
-            />
-            {profile?.role && (profile.role === "studio_admin" || profile.role === "super_admin") && (
-              <Button
-                render={<Link href="/admin">Studio Admin OS</Link>}
-                variant="outline"
-                className="font-mono text-xs border-brand-border text-brand-light"
-              />
-            )}
-          </div>
+    <div className="space-y-8">
+      {/* Header Banner */}
+      <div className="rounded-2xl border border-[#232528] bg-[#121315] p-6 sm:p-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="space-y-1">
+          <span className="badge-mono text-[#D9BD81]">
+            Client Creative Office &bull; Creative Office OS 2.0
+          </span>
+          <h1 className="text-2xl sm:text-3xl font-bold text-[#F6F4EF]">
+            Welcome, {userEmail}
+          </h1>
+          <p className="text-xs text-[#F6F4EF]/65">
+            Track live creative production milestones, coordinate pin proofs, 2
+            consolidated revision rounds, and commercial buyout handovers.
+          </p>
         </div>
 
-        {/* 3 Metric Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2 border-t border-brand-border/60 font-mono">
-          <div className="p-4 rounded-xl bg-brand-surface border border-brand-border space-y-1">
-            <span className="text-[11px] text-brand-muted uppercase">Active Production Projects</span>
-            <span className="text-2xl font-bold text-brand-light block">{projects.length}</span>
-          </div>
-          <div className="p-4 rounded-xl bg-brand-surface border border-brand-border space-y-1">
-            <span className="text-[11px] text-brand-muted uppercase">Pending Quotations</span>
-            <span className="text-2xl font-bold text-amber-400 block">{quotes.length}</span>
-          </div>
-          <div className="p-4 rounded-xl bg-brand-surface border border-brand-border space-y-1">
-            <span className="text-[11px] text-brand-muted uppercase">Settled Orders & Invoices</span>
-            <span className="text-2xl font-bold text-emerald-400 block">{orders.length}</span>
-          </div>
-        </div>
+        <Button
+          render={<Link href="/builder">+ New Smart Brief</Link>}
+          className="cyber-glow bg-[#D9BD81] hover:bg-[#D9BD81]/90 text-[#090A0A] font-semibold text-xs font-mono shrink-0"
+        />
       </div>
 
-      {/* SECTION 1: ACTIVE PRODUCTION PROJECTS */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-brand-light font-mono">
-            Active Creative Production Projects ({projects.length})
-          </h2>
-        </div>
+      {/* Tabs */}
+      <div className="flex flex-wrap gap-2 border-b border-[#232528] pb-3">
+        <button
+          type="button"
+          onClick={() => setActiveTab("projects")}
+          className={`px-4 py-2 rounded-lg text-xs font-mono transition-colors ${
+            activeTab === "projects"
+              ? "bg-[#D9BD81] text-[#090A0A] font-bold"
+              : "bg-[#121315] text-[#F6F4EF]/70 hover:text-[#F6F4EF]"
+          }`}
+        >
+          Live Account Projects ({projects.length})
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("orders")}
+          className={`px-4 py-2 rounded-lg text-xs font-mono transition-colors ${
+            activeTab === "orders"
+              ? "bg-[#D9BD81] text-[#090A0A] font-bold"
+              : "bg-[#121315] text-[#F6F4EF]/70 hover:text-[#F6F4EF]"
+          }`}
+        >
+          Orders &amp; Invoices ({orders.length})
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("quotes")}
+          className={`px-4 py-2 rounded-lg text-xs font-mono transition-colors ${
+            activeTab === "quotes"
+              ? "bg-[#D9BD81] text-[#090A0A] font-bold"
+              : "bg-[#121315] text-[#F6F4EF]/70 hover:text-[#F6F4EF]"
+          }`}
+        >
+          Formal Quotations ({quotes.length})
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("demo_office")}
+          className={`px-4 py-2 rounded-lg text-xs font-mono transition-colors border ${
+            activeTab === "demo_office"
+              ? "bg-[#D9BD81] text-[#090A0A] border-[#D9BD81] font-bold"
+              : "bg-[#121315] text-[#D9BD81] border-[#D9BD81]/40 hover:bg-[#D9BD81]/10"
+          }`}
+        >
+          DEMO DATA &bull; Interactive Client Office &amp; Proofing Sandbox
+        </button>
+      </div>
 
-        {projects.length === 0 ? (
-          <div className="glass-panel p-8 text-center rounded-2xl border border-brand-border space-y-3">
-            <p className="text-brand-muted font-mono text-xs">
-              No active production projects found. Build and launch a creative package to start.
-            </p>
-            <Button
-              render={<Link href="/builder">Configure Package in Builder</Link>}
-              variant="outline"
-              size="sm"
-              className="font-mono text-xs border-brand-border"
-            />
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {projects.map((proj) => (
+      {/* Tab Content: Projects */}
+      {activeTab === "projects" && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {projects.length === 0 ? (
+            <div className="col-span-full rounded-xl border border-[#232528] bg-[#121315] p-12 text-center space-y-4">
+              <p className="text-sm text-[#F6F4EF]/75 font-mono">
+                No live database projects found for this account yet.
+              </p>
+              <div className="flex flex-wrap justify-center gap-3">
+                <Button
+                  render={<Link href="/builder">Configure First Smart Brief</Link>}
+                  size="sm"
+                  className="bg-[#D9BD81] text-[#090A0A] font-mono text-xs font-semibold"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setActiveTab("demo_office")}
+                  className="border-[#D9BD81]/40 text-[#D9BD81] font-mono text-xs"
+                >
+                  Open Interactive Client Office Demo (DEMO DATA)
+                </Button>
+              </div>
+            </div>
+          ) : (
+            projects.map((prj) => (
               <div
-                key={proj.id}
-                className="glass-card p-5 rounded-2xl border border-brand-border hover:border-brand-highlight/40 transition-all space-y-4 flex flex-col justify-between"
+                key={prj.id}
+                className="rounded-xl border border-[#232528] bg-[#121315] p-6 flex flex-col justify-between space-y-5 hover:border-[#D9BD81]/40 transition-colors"
               >
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="badge-mono text-brand-highlight text-xs font-bold">
-                      {proj.id}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-mono text-xs text-[#F6F4EF]/65">
+                      #{prj.id.slice(0, 12)}
                     </span>
-                    <Badge
-                      variant="outline"
-                      className="font-mono text-[10px] uppercase border-brand-border text-brand-light bg-brand-surface"
-                    >
-                      {proj.status.replace(/_/g, " ")}
-                    </Badge>
+                    <span className="text-[10px] font-mono uppercase px-2.5 py-0.5 rounded bg-[#D9BD81]/10 text-[#D9BD81] border border-[#D9BD81]/30">
+                      {prj.status.replace(/_/g, " ")}
+                    </span>
                   </div>
-                  <h3 className="font-semibold text-sm text-brand-light">
-                    {proj.title}
+
+                  <h3 className="text-lg font-bold text-[#F6F4EF]">
+                    {prj.title}
                   </h3>
-                  <div className="flex items-center gap-3 text-xs font-mono text-brand-muted pt-1">
-                    <span>Revisions: {proj.revisions_used} / {proj.max_revisions}</span>
-                    <span>•</span>
-                    <span>Licensing: Full Buyout</span>
+
+                  <div className="grid grid-cols-2 gap-3 pt-2 text-xs font-mono text-[#F6F4EF]/65">
+                    <div>
+                      <span className="block text-[10px] uppercase text-[#F6F4EF]/45">
+                        Revision Quota
+                      </span>
+                      <span className="text-[#F6F4EF]">
+                        {prj.revisions_used} / {prj.max_revisions} Rounds Used
+                      </span>
+                    </div>
+                    <div>
+                      <span className="block text-[10px] uppercase text-[#F6F4EF]/45">
+                        Initialized
+                      </span>
+                      <span className="text-[#F6F4EF]">
+                        {new Date(prj.created_at).toLocaleDateString()}
+                      </span>
+                    </div>
                   </div>
                 </div>
 
-                <div className="pt-3 border-t border-brand-border flex items-center justify-between">
+                <div className="pt-4 border-t border-[#232528] flex items-center justify-between">
+                  <span className="text-xs font-mono text-[#F6F4EF]/60">
+                    Brief, Tasks &amp; Visual Proofing
+                  </span>
                   <Button
-                    render={<Link href={`/dashboard/projects/${proj.id}`}>Enter Workspace</Link>}
+                    render={
+                      <Link href={`/dashboard/projects/${prj.id}`}>
+                        Open Workspace &rarr;
+                      </Link>
+                    }
                     size="sm"
-                    className="cyber-glow bg-brand-highlight hover:bg-brand-highlight/90 text-brand-black font-semibold font-mono text-xs w-full"
+                    className="bg-[#D9BD81] hover:bg-[#D9BD81]/90 text-[#090A0A] font-semibold font-mono text-xs h-8"
                   />
                 </div>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* SECTION 2: FORMAL QUOTATIONS DESK */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-brand-light font-mono">
-            Commercial Quotations Desk ({quotes.length})
-          </h2>
+            ))
+          )}
         </div>
+      )}
 
-        {quotes.length === 0 ? (
-          <div className="glass-panel p-6 text-center rounded-2xl border border-brand-border">
-            <p className="text-brand-muted font-mono text-xs">
-              No pending formal quotations. Packages requiring custom enterprise scoping will appear here.
-            </p>
-          </div>
-        ) : (
-          <div className="border border-brand-border rounded-2xl overflow-hidden glass-panel">
+      {/* Tab Content: Orders */}
+      {activeTab === "orders" && (
+        <div className="rounded-xl border border-[#232528] bg-[#121315] overflow-hidden">
+          {orders.length === 0 ? (
+            <div className="p-10 text-center text-xs font-mono text-[#F6F4EF]/60">
+              No verified payment transactions recorded yet.
+            </div>
+          ) : (
             <table className="w-full text-left text-xs font-mono">
-              <thead className="bg-brand-surface border-b border-brand-border text-brand-muted uppercase text-[10px]">
+              <thead className="border-b border-[#232528] bg-[#090A0A] text-[#F6F4EF]/65 uppercase text-[10px]">
                 <tr>
-                  <th className="p-3.5">Quote Reference</th>
-                  <th className="p-3.5">Status</th>
-                  <th className="p-3.5">Amount (BDT)</th>
-                  <th className="p-3.5">Amount (USD)</th>
-                  <th className="p-3.5">Expiry</th>
-                  <th className="p-3.5 text-right">Action</th>
+                  <th className="p-4">Order ID</th>
+                  <th className="p-4">Status</th>
+                  <th className="p-4">Gateway</th>
+                  <th className="p-4">Total</th>
+                  <th className="p-4">Date</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-brand-border/60">
-                {quotes.map((q) => (
-                  <tr key={q.id} className="hover:bg-brand-surface/40">
-                    <td className="p-3.5 font-bold text-brand-highlight">{q.quote_ref}</td>
-                    <td className="p-3.5">
-                      <Badge variant="outline" className="text-[10px] uppercase border-amber-500/40 text-amber-400 bg-amber-500/10">
-                        {q.status}
-                      </Badge>
-                    </td>
-                    <td className="p-3.5 text-brand-light font-bold">
-                      ৳ {Number(q.amount_bdt).toLocaleString()}
-                    </td>
-                    <td className="p-3.5 text-brand-muted">${Number(q.amount_usd)}</td>
-                    <td className="p-3.5 text-brand-muted">
-                      {new Date(q.expires_at).toLocaleDateString()}
-                    </td>
-                    <td className="p-3.5 text-right">
-                      <Button
-                        render={<Link href="/builder">Review Scope</Link>}
-                        size="sm"
-                        variant="outline"
-                        className="text-[11px] font-mono h-7 border-brand-border"
-                      />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {/* SECTION 3: RECENT ORDERS & INVOICES */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-brand-light font-mono">
-            Settled Orders &amp; Branded Invoices ({orders.length})
-          </h2>
-        </div>
-
-        {orders.length === 0 ? (
-          <div className="glass-panel p-6 text-center rounded-2xl border border-brand-border">
-            <p className="text-brand-muted font-mono text-xs">
-              No orders settled yet.
-            </p>
-          </div>
-        ) : (
-          <div className="border border-brand-border rounded-2xl overflow-hidden glass-panel">
-            <table className="w-full text-left text-xs font-mono">
-              <thead className="bg-brand-surface border-b border-brand-border text-brand-muted uppercase text-[10px]">
-                <tr>
-                  <th className="p-3.5">Order Ref</th>
-                  <th className="p-3.5">Settlement Status</th>
-                  <th className="p-3.5">Total Paid</th>
-                  <th className="p-3.5">Date</th>
-                  <th className="p-3.5 text-right">Invoice</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-brand-border/60">
+              <tbody className="divide-y divide-[#232528]">
                 {orders.map((ord) => (
-                  <tr key={ord.id} className="hover:bg-brand-surface/40">
-                    <td className="p-3.5 font-bold text-brand-light">{ord.order_ref}</td>
-                    <td className="p-3.5">
-                      <Badge variant="outline" className="text-[10px] uppercase border-emerald-500/40 text-emerald-400 bg-emerald-500/10">
-                        {ord.payment_status}
-                      </Badge>
+                  <tr key={ord.id}>
+                    <td className="p-4 font-bold text-[#F6F4EF]">
+                      {ord.id.slice(0, 12)}
                     </td>
-                    <td className="p-3.5 text-emerald-400 font-bold">
-                      {ord.currency === "BDT" ? `৳ ${Number(ord.amount_bdt).toLocaleString()}` : `$ ${ord.amount_usd}`}
+                    <td className="p-4">
+                      <span
+                        className={`px-2 py-0.5 rounded uppercase text-[10px] ${
+                          ord.status === "paid"
+                            ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"
+                            : "bg-amber-500/10 text-amber-400 border border-amber-500/30"
+                        }`}
+                      >
+                        {ord.status}
+                      </span>
                     </td>
-                    <td className="p-3.5 text-brand-muted">
+                    <td className="p-4 uppercase text-[#F6F4EF]/70">
+                      {ord.payment_gateway || "N/A"}
+                    </td>
+                    <td className="p-4 font-bold text-[#D9BD81]">
+                      {ord.currency === "BDT"
+                        ? `৳${ord.total_bdt.toLocaleString()}`
+                        : `$${ord.total_usd.toLocaleString()}`}
+                    </td>
+                    <td className="p-4 text-[#F6F4EF]/65">
                       {new Date(ord.created_at).toLocaleDateString()}
                     </td>
-                    <td className="p-3.5 text-right">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setSelectedInvoice(ord)}
-                        className="text-[11px] font-mono h-7 border-brand-border hover:bg-brand-surface text-brand-light"
-                      >
-                        View Invoice
-                      </Button>
-                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      )}
 
-      {/* Branded Invoice Modal */}
-      {selectedInvoice && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
-          <div className="glass-panel w-full max-w-xl p-8 rounded-3xl border border-brand-border shadow-2xl space-y-6 cyber-glow max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-brand-border pb-4">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-brand-light text-brand-black flex items-center justify-center font-mono font-black text-xs">
-                  FS
-                </div>
-                <div>
-                  <h3 className="font-bold text-sm text-brand-light font-mono">
-                    Freakin&apos;s Studio Creative OS
-                  </h3>
-                  <span className="text-[10px] font-mono text-emerald-400 uppercase">
-                    [OFFICIAL SETTLED COMMERCIAL INVOICE]
-                  </span>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSelectedInvoice(null)}
-                className="text-brand-muted hover:text-brand-light text-sm font-mono"
-              >
-                ✕
-              </button>
+      {/* Tab Content: Quotes */}
+      {activeTab === "quotes" && (
+        <div className="space-y-4">
+          {quotes.length === 0 ? (
+            <div className="rounded-xl border border-[#232528] bg-[#121315] p-10 text-center text-xs font-mono text-[#F6F4EF]/60">
+              No formal quotations requested yet.
             </div>
-
-            <div className="space-y-6 text-xs font-mono text-brand-light">
-              <div className="flex justify-between items-start">
-                <div>
-                  <span className="text-brand-muted text-[10px] uppercase block">Billed To</span>
-                  <span className="font-bold text-sm block mt-0.5">{profile?.full_name || "Authorized Corporate Account"}</span>
-                  <span className="text-brand-muted block">{profile?.email}</span>
-                </div>
-                <div className="text-right">
-                  <span className="text-brand-muted text-[10px] uppercase block">Invoice Reference</span>
-                  <span className="font-bold text-sm block">INV-{selectedInvoice.order_ref}</span>
-                  <span className="text-brand-muted block">{new Date(selectedInvoice.created_at).toLocaleDateString()}</span>
+          ) : (
+            <>
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#232528] bg-[#121315] p-4 text-xs font-mono">
+                <span className="text-[#F6F4EF]/70">
+                  Preferred Payment Gateway for Issued Quotes:
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedGateway("sslcommerz")}
+                    className={`px-3 py-1.5 rounded border transition-colors ${
+                      selectedGateway === "sslcommerz"
+                        ? "border-[#D9BD81] bg-[#D9BD81]/15 text-[#F6F4EF] font-bold"
+                        : "border-[#232528] text-[#F6F4EF]/65"
+                    }`}
+                  >
+                    SSLCommerz (BDT)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedGateway("stripe")}
+                    className={`px-3 py-1.5 rounded border transition-colors ${
+                      selectedGateway === "stripe"
+                        ? "border-[#D9BD81] bg-[#D9BD81]/15 text-[#F6F4EF] font-bold"
+                        : "border-[#232528] text-[#F6F4EF]/65"
+                    }`}
+                  >
+                    Stripe (USD)
+                  </button>
                 </div>
               </div>
 
-              <div className="border border-brand-border rounded-xl overflow-hidden">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-brand-surface border-b border-brand-border text-brand-muted uppercase text-[10px]">
+              <div className="rounded-xl border border-[#232528] bg-[#121315] overflow-hidden">
+                <table className="w-full text-left text-xs font-mono">
+                  <thead className="border-b border-[#232528] bg-[#090A0A] text-[#F6F4EF]/65 uppercase text-[10px]">
                     <tr>
-                      <th className="p-3">Deliverable Item Scope</th>
-                      <th className="p-3">Commercial Rights</th>
-                      <th className="p-3 text-right">Status</th>
+                      <th className="p-4">Quote ID</th>
+                      <th className="p-4">Status</th>
+                      <th className="p-4">Approved Investment</th>
+                      <th className="p-4">Notes</th>
+                      <th className="p-4 text-right">Action</th>
                     </tr>
                   </thead>
-                  <tbody>
-                    <tr>
-                      <td className="p-3 font-medium text-brand-light">
-                        {selectedInvoice.order_ref} — Creative Production Suite
-                      </td>
-                      <td className="p-3 text-brand-muted">Full Commercial Buyout</td>
-                      <td className="p-3 text-right text-emerald-400 font-bold">Settled</td>
-                    </tr>
+                  <tbody className="divide-y divide-[#232528]">
+                    {quotes.map((q) => (
+                      <tr key={q.id}>
+                        <td className="p-4 font-bold text-[#F6F4EF]">
+                          {q.id.slice(0, 12)}
+                        </td>
+                        <td className="p-4">
+                          <span className="px-2 py-0.5 rounded uppercase text-[10px] border border-[#D9BD81]/30 bg-[#D9BD81]/10 text-[#D9BD81]">
+                            {q.status}
+                          </span>
+                        </td>
+                        <td className="p-4 text-[#F6F4EF]">
+                          {q.amount_bdt
+                            ? `৳${q.amount_bdt.toLocaleString()} / $${(
+                                q.amount_usd || 0
+                              ).toLocaleString()}`
+                            : "Under Studio Review"}
+                        </td>
+                        <td className="p-4 text-[#F6F4EF]/70 max-w-xs truncate">
+                          {q.admin_notes || "Awaiting studio scoping."}
+                        </td>
+                        <td className="p-4 text-right">
+                          {q.status === "issued" && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              disabled={processingQuoteId === q.id}
+                              onClick={() => handleAcceptQuote(q.id)}
+                              className="bg-[#D9BD81] text-[#090A0A] text-xs font-mono h-8 font-semibold"
+                            >
+                              {processingQuoteId === q.id
+                                ? "Processing..."
+                                : "Accept & Pay →"}
+                            </Button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
+            </>
+          )}
+        </div>
+      )}
 
-              <div className="border-t border-brand-border pt-3 flex justify-between items-baseline text-sm">
-                <span className="text-brand-muted text-xs">Total Settled in Full:</span>
-                <span className="text-xl font-bold text-emerald-400">
-                  {selectedInvoice.currency === "BDT"
-                    ? `৳ ${Number(selectedInvoice.amount_bdt).toLocaleString()}`
-                    : `$ ${Number(selectedInvoice.amount_usd).toLocaleString()}`}
-                </span>
-              </div>
-            </div>
-
-            <div className="flex justify-end pt-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setSelectedInvoice(null)}
-                className="font-mono text-xs border-brand-border"
-              >
-                Close
-              </Button>
-            </div>
-          </div>
+      {/* Tab Content: Interactive Demo Client Office */}
+      {activeTab === "demo_office" && (
+        <div className="rounded-2xl border border-[#D9BD81]/40 overflow-hidden">
+          <CreativeOfficeOS initialRoute="office" />
         </div>
       )}
     </div>

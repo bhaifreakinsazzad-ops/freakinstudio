@@ -1,125 +1,170 @@
 "use client";
-import Link from "next/link";
+
 import { useState } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LanguageToggle } from "./language-toggle";
+import { useI18n } from "@/lib/i18n/context";
 import { BrandLogo } from "@/components/ui/BrandLogo";
-import { useLocale } from "@/lib/i18n/context";
+import { PWAInstallButton } from "@/components/pwa/pwa-install-button";
 
-export function Navbar() {
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const { t } = useLocale();
+interface NavbarProps {
+  userEmail?: string | null;
+  userRole?: string | null;
+}
 
-  const navLinks = [
-    { href: "/services", label: t("nav_services"), highlight: false },
-    { href: "/builder", label: t("nav_builder"), highlight: true },
-    { href: "/portfolio", label: t("nav_portfolio"), highlight: false },
-    { href: "/case-studies", label: t("nav_case_studies"), highlight: false },
-    { href: "/dashboard", label: t("nav_workspace"), highlight: false },
+export function Navbar({ userEmail, userRole }: NavbarProps) {
+  const { t } = useI18n();
+  const pathname = usePathname();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const navItems = [
+    { href: "/", label: t("nav.orbit", "Orbit Discovery") },
+    { href: "/tools", label: t("nav.tools", "Free Tools (6)") },
+    { href: "/services", label: t("nav.services", "Services (13)") },
+    { href: "/kits", label: t("nav.kits", "AI & Kits") },
+    { href: "/portfolio", label: t("nav.portfolio", "Concept Works") },
+    { href: "/builder", label: t("nav.builder", "Smart Brief") },
+    { href: "/dashboard", label: t("nav.portal", "Client Office") },
+    { href: "/admin", label: t("nav.admin", "Studio Pulse") },
   ];
 
+  const isActive = (href: string) => {
+    if (href === "/") return pathname === "/";
+    return pathname?.startsWith(href);
+  };
+
   return (
-    <header className="sticky top-0 z-40 border-b border-brand-border bg-brand-black/90 backdrop-blur-md">
-      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-6 px-4 sm:px-6">
-        {/* Zone 1: Brand mark & single-line wordmark */}
-        <Link href="/" className="flex items-center shrink-0 whitespace-nowrap">
-          <BrandLogo size={36} showWordmark />
+    <header className="sticky top-0 z-50 w-full border-b border-[#232528] bg-[#090A0A]/92 backdrop-blur-md">
+      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 gap-2">
+        <Link
+          href="/"
+          className="flex items-center gap-3 shrink-0"
+          aria-label="Freakin's Studio Home"
+        >
+          <BrandLogo size="sm" />
         </Link>
 
-        {/* Zone 2: Single-line navigation links */}
-        <nav className="hidden lg:flex items-center gap-6 text-xs font-mono uppercase tracking-wider text-brand-muted">
-          {navLinks.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`whitespace-nowrap shrink-0 transition-colors hover:underline underline-offset-4 ${
-                item.highlight
-                  ? "text-brand-highlight hover:text-brand-light font-semibold"
-                  : "hover:text-brand-light"
-              }`}
-            >
-              {item.label}
-            </Link>
-          ))}
+        {/* Desktop Nav */}
+        <nav
+          aria-label="Primary Navigation"
+          className="hidden xl:flex items-center gap-1 text-xs font-medium"
+        >
+          {navItems.map((item) => {
+            const active = isActive(item.href);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`px-2.5 py-1.5 rounded-lg transition-colors whitespace-nowrap ${
+                  active
+                    ? "bg-[#D9BD81] text-[#090A0A] font-semibold"
+                    : "text-[#F6F4EF]/75 hover:text-[#F6F4EF] hover:bg-[#232528]/60"
+                }`}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
         </nav>
 
-        {/* Zone 3: Language toggle & actions */}
-        <div className="flex items-center gap-2 shrink-0">
+        {/* Right Actions */}
+        <div className="flex items-center gap-2">
+          <PWAInstallButton />
           <LanguageToggle />
-          <Button
-            render={<Link href="/login">{t("nav_sign_in")}</Link>}
-            variant="ghost"
-            size="sm"
-            className="hidden sm:inline-flex text-xs font-mono text-brand-light hover:text-brand-highlight whitespace-nowrap shrink-0"
-          />
-          <Button
-            render={<Link href="/builder">{t("nav_build_package")}</Link>}
-            size="sm"
-            className="hidden sm:inline-flex cyber-glow bg-brand-highlight hover:bg-brand-highlight/90 text-brand-black font-semibold font-mono text-xs whitespace-nowrap shrink-0"
-          />
+          {userEmail ? (
+            <div className="hidden sm:flex items-center gap-2">
+              {userRole &&
+                ["admin", "super_admin", "operations_manager"].includes(
+                  userRole
+                ) && (
+                  <Button
+                    render={<Link href="/admin">{t("nav.admin")}</Link>}
+                    variant="outline"
+                    size="sm"
+                    className="font-mono text-xs border-[#D9BD81]/40 text-[#D9BD81]"
+                  />
+                )}
+              <Button
+                render={<Link href="/dashboard">{t("nav.portal")}</Link>}
+                size="sm"
+                className="bg-[#D9BD81] hover:bg-[#D9BD81]/90 text-[#090A0A] font-semibold text-xs font-mono"
+              />
+            </div>
+          ) : (
+            <div className="hidden sm:flex items-center gap-2">
+              <Button
+                render={<Link href="/login">{t("nav.signin")}</Link>}
+                variant="ghost"
+                size="sm"
+                className="text-xs font-mono text-[#F6F4EF]/75 hover:text-[#F6F4EF]"
+              />
+              <Button
+                render={<Link href="/builder">{t("nav.launch")}</Link>}
+                size="sm"
+                className="cyber-glow bg-[#D9BD81] hover:bg-[#D9BD81]/90 text-[#090A0A] font-semibold text-xs font-mono"
+              />
+            </div>
+          )}
+
+          {/* Mobile Drawer Trigger */}
           <button
             type="button"
-            className="lg:hidden p-2 rounded-md text-brand-muted hover:text-brand-light focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-highlight"
-            aria-label={mobileOpen ? "Close menu" : "Open menu"}
-            aria-expanded={mobileOpen}
-            onClick={() => setMobileOpen(!mobileOpen)}
+            onClick={() => setMobileMenuOpen((prev) => !prev)}
+            aria-expanded={mobileMenuOpen}
+            aria-label={
+              mobileMenuOpen ? "Close navigation menu" : "Open navigation menu"
+            }
+            className="xl:hidden inline-flex items-center justify-center rounded-md border border-[#232528] bg-[#121315] p-2 text-[#F6F4EF] hover:border-[#D9BD81]/50 transition-colors"
           >
-            {mobileOpen ? (
-              <X className="h-5 w-5" aria-hidden="true" />
+            {mobileMenuOpen ? (
+              <X className="h-4 w-4" />
             ) : (
-              <Menu className="h-5 w-5" aria-hidden="true" />
+              <Menu className="h-4 w-4" />
             )}
           </button>
         </div>
       </div>
 
-      {/* Mobile drawer */}
-      {mobileOpen && (
-        <nav className="lg:hidden bg-brand-black border-t border-brand-border">
-          <div className="px-4 pt-3 pb-5 space-y-2 text-sm font-mono">
-            {navLinks.map((item) => (
+      {/* Mobile Navigation Drawer */}
+      {mobileMenuOpen && (
+        <nav
+          aria-label="Mobile Navigation"
+          className="xl:hidden border-t border-[#232528] bg-[#090A0A]/98 px-4 py-4 space-y-3"
+        >
+          <div className="grid grid-cols-2 gap-2 text-xs font-mono">
+            {navItems.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
-                onClick={() => setMobileOpen(false)}
-                className={`block py-2 transition-colors ${
-                  item.highlight
-                    ? "text-brand-highlight font-semibold hover:text-brand-light"
-                    : "text-brand-muted hover:text-brand-light"
+                onClick={() => setMobileMenuOpen(false)}
+                className={`rounded-lg border px-3 py-2.5 transition-colors ${
+                  isActive(item.href)
+                    ? "border-[#D9BD81] bg-[#D9BD81]/15 text-[#D9BD81] font-semibold"
+                    : "border-[#232528] bg-[#121315]/60 text-[#F6F4EF] hover:border-[#D9BD81]/40"
                 }`}
               >
                 {item.label}
               </Link>
             ))}
+          </div>
+          <div className="pt-2 border-t border-[#232528]/60 flex items-center justify-between gap-2">
             <Link
-              href="/contact"
-              onClick={() => setMobileOpen(false)}
-              className="block py-2 text-brand-muted hover:text-brand-light transition-colors"
+              href="/login"
+              onClick={() => setMobileMenuOpen(false)}
+              className="text-xs font-mono text-[#F6F4EF]/70 hover:text-[#F6F4EF] px-2 py-1.5"
             >
-              {t("nav_contact")}
+              {t("nav.signin")}
             </Link>
-            <div className="pt-3 border-t border-brand-border flex items-center gap-2">
-              <Button
-                render={
-                  <Link href="/login" onClick={() => setMobileOpen(false)}>
-                    {t("nav_sign_in")}
-                  </Link>
-                }
-                variant="outline"
-                size="sm"
-                className="flex-1 text-xs font-mono border-brand-border text-brand-light"
-              />
-              <Button
-                render={
-                  <Link href="/builder" onClick={() => setMobileOpen(false)}>
-                    {t("nav_build_package")}
-                  </Link>
-                }
-                size="sm"
-                className="flex-1 bg-brand-highlight text-brand-black font-semibold font-mono text-xs"
-              />
-            </div>
+            <Link
+              href="/builder"
+              onClick={() => setMobileMenuOpen(false)}
+              className="rounded-lg bg-[#D9BD81] px-4 py-2 text-xs font-mono font-semibold text-[#090A0A]"
+            >
+              {t("nav.launch")}
+            </Link>
           </div>
         </nav>
       )}

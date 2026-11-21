@@ -1,71 +1,191 @@
-"use client";
 import Link from "next/link";
-
-import { BrandLogo } from "../ui/BrandLogo";
-
-// Next 16's cacheComponents prerendering rejects new Date() at render time
-// (it's an unstable value); a static build-time year is fine for a footer.
-const COPYRIGHT_YEAR = 2026;
+import { BrandLogo } from "@/components/ui/BrandLogo";
+import { BRAND_TOKENS } from "@/lib/designTokens";
 
 export function Footer() {
   return (
-    <footer className="border-t border-brand-border bg-brand-surface/30 pt-16 pb-12">
+    <footer className="border-t border-[#232528] bg-[#090A0A] py-12 text-xs text-[#F6F4EF]/65">
       <div className="mx-auto max-w-7xl px-4 sm:px-6">
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-8 mb-12">
-          {/* Brand Info */}
-          <div className="col-span-2 space-y-4">
-            <Link href="/" className="inline-flex items-center">
-              <BrandLogo size={34} showWordmark />
-            </Link>
-            <p className="text-xs text-brand-muted max-w-sm leading-relaxed">
-              Creative Commerce Operating System. High-velocity graphic design, brand systems, video &amp; 3D motion, paid ad creative, and corporate communication built for ambitious commercial ventures.
+        <div className="grid grid-cols-1 gap-8 md:grid-cols-4">
+          <div className="space-y-3">
+            <BrandLogo size="sm" />
+            <p className="leading-relaxed text-[#F6F4EF]/60">
+              Creative Office OS 2.0 — Browser-native free creative utilities,
+              Puter-free sponsored Studio AI direction, and 13 hourly-scoped
+              human creative services across 4 disciplines.
             </p>
+            <div className="flex flex-wrap items-center gap-2 pt-1 font-mono text-[10px]">
+              <span className="rounded border border-[#232528] bg-[#121315] px-2 py-0.5 text-[#D9BD81]">
+                #090A0A Obsidian
+              </span>
+              <span className="rounded border border-[#232528] bg-[#121315] px-2 py-0.5 text-[#D9BD81]">
+                #D9BD81 Champagne Gold
+              </span>
+              <span className="rounded border border-[#232528] bg-[#121315] px-2 py-0.5 text-[#F6F4EF]">
+                #F6F4EF Ivory
+              </span>
+            </div>
           </div>
 
-          {/* Platform */}
-          <div className="space-y-3">
-            <h4 className="font-mono text-xs uppercase tracking-wider text-brand-light font-semibold">Platform</h4>
-            <ul className="space-y-2 text-xs font-mono text-brand-muted">
-              <li><Link href="/services" className="hover:text-brand-light transition-colors">Services Catalog (60)</Link></li>
-              <li><Link href="/builder" className="hover:text-brand-light transition-colors">Package Builder</Link></li>
-              <li><Link href="/how-it-works" className="hover:text-brand-light transition-colors">How It Works</Link></li>
-              <li><Link href="/portfolio" className="hover:text-brand-light transition-colors">Portfolio Showcase</Link></li>
-              <li><Link href="/case-studies" className="hover:text-brand-light transition-colors">Case Studies</Link></li>
+          <div>
+            <h4 className="mb-3 font-mono uppercase tracking-wider text-[#D9BD81]">
+              Creative Office OS
+            </h4>
+            <ul className="space-y-2">
+              <li>
+                <Link
+                  href="/tools"
+                  className="hover:text-[#F6F4EF] transition-colors"
+                >
+                  Free Browser Tools (6 Local Utilities)
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/services"
+                  className="hover:text-[#F6F4EF] transition-colors"
+                >
+                  Canonical Service Catalog (13 Services)
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/kits"
+                  className="hover:text-[#F6F4EF] transition-colors"
+                >
+                  Studio AI Assistants &amp; Micro-Kits (৳49/৳99/৳199)
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/builder"
+                  className="hover:text-[#F6F4EF] transition-colors"
+                >
+                  3-Step Smart Project Brief &amp; Estimator
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/portfolio"
+                  className="hover:text-[#F6F4EF] transition-colors"
+                >
+                  Concept Works (Labeled Non-Client Specimens)
+                </Link>
+              </li>
             </ul>
           </div>
 
-          {/* Studio & Support */}
-          <div className="space-y-3">
-            <h4 className="font-mono text-xs uppercase tracking-wider text-brand-light font-semibold">Studio</h4>
-            <ul className="space-y-2 text-xs font-mono text-brand-muted">
-              <li><Link href="/about" className="hover:text-brand-light transition-colors">About Us</Link></li>
-              <li><Link href="/contact" className="hover:text-brand-light transition-colors">Contact &amp; Desk</Link></li>
-              <li><Link href="/faq" className="hover:text-brand-light transition-colors">FAQ</Link></li>
-              <li><Link href="/dashboard" className="hover:text-brand-light transition-colors">Client Portal</Link></li>
-              <li><Link href="/admin" className="hover:text-brand-light transition-colors">Studio Admin OS</Link></li>
+          <div>
+            <h4 className="mb-3 font-mono uppercase tracking-wider text-[#D9BD81]">
+              4 Approved Disciplines
+            </h4>
+            <ul className="space-y-2">
+              <li>
+                <Link
+                  href="/services?category=DISC-01"
+                  className="hover:text-[#F6F4EF] transition-colors"
+                >
+                  01 &middot; Brand &amp; Visual Identity (SRV-01..04)
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/services?category=DISC-02"
+                  className="hover:text-[#F6F4EF] transition-colors"
+                >
+                  02 &middot; Social Media &amp; Campaign (SRV-05..08)
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/services?category=DISC-03"
+                  className="hover:text-[#F6F4EF] transition-colors"
+                >
+                  03 &middot; Commercial Graphic &amp; Print (SRV-09..11)
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/services?category=DISC-04"
+                  className="hover:text-[#F6F4EF] transition-colors"
+                >
+                  04 &middot; Motion, Reels &amp; Video (SRV-12..13)
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/revision-policy"
+                  className="hover:text-[#F6F4EF] transition-colors"
+                >
+                  2 Consolidated Revisions &amp; Licensing Policy
+                </Link>
+              </li>
             </ul>
           </div>
 
-          {/* Legal & Policy */}
-          <div className="space-y-3">
-            <h4 className="font-mono text-xs uppercase tracking-wider text-brand-light font-semibold">Legal &amp; Policy</h4>
-            <ul className="space-y-2 text-xs font-mono text-brand-muted">
-              <li><Link href="/licensing-policy" className="hover:text-brand-light transition-colors">Commercial Buyout</Link></li>
-              <li><Link href="/revision-policy" className="hover:text-brand-light transition-colors">Revision SLA</Link></li>
-              <li><Link href="/refund-policy" className="hover:text-brand-light transition-colors">Refund Policy</Link></li>
-              <li><Link href="/terms" className="hover:text-brand-light transition-colors">Terms of Service</Link></li>
-              <li><Link href="/privacy" className="hover:text-brand-light transition-colors">Privacy Policy</Link></li>
+          <div>
+            <h4 className="mb-3 font-mono uppercase tracking-wider text-[#D9BD81]">
+              Verified Official Contacts
+            </h4>
+            <ul className="space-y-2.5 font-mono text-[11px]">
+              <li>
+                <span className="block text-[10px] uppercase text-[#F6F4EF]/45">
+                  Official WhatsApp Desk
+                </span>
+                <a
+                  href={BRAND_TOKENS.contacts.whatsappHref}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[#D9BD81] hover:underline font-semibold"
+                >
+                  {BRAND_TOKENS.contacts.whatsappDisplay}
+                </a>
+              </li>
+              <li>
+                <span className="block text-[10px] uppercase text-[#F6F4EF]/45">
+                  Official Studio Email
+                </span>
+                <a
+                  href={`mailto:${BRAND_TOKENS.contacts.email}`}
+                  className="text-[#F6F4EF] hover:text-[#D9BD81] transition-colors"
+                >
+                  {BRAND_TOKENS.contacts.email}
+                </a>
+              </li>
+              <li>
+                <span className="block text-[10px] uppercase text-[#F6F4EF]/45">
+                  Official Web Domain
+                </span>
+                <a
+                  href={BRAND_TOKENS.contacts.websiteHref}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[#F6F4EF] hover:text-[#D9BD81] transition-colors"
+                >
+                  {BRAND_TOKENS.contacts.website}
+                </a>
+              </li>
+              <li className="pt-1">
+                <Link
+                  href="/contact"
+                  className="text-[#D9BD81] hover:underline"
+                >
+                  Submit Studio Consultation Inquiry &rarr;
+                </Link>
+              </li>
             </ul>
           </div>
         </div>
 
-        <div className="pt-8 border-t border-brand-border flex flex-col sm:flex-row items-center justify-between gap-4 text-xs font-mono text-brand-muted">
-          <p className="badge-mono text-brand-highlight">Design. Create. Produce. Grow.</p>
-          <div className="flex items-center gap-6">
-            <span>&copy; {COPYRIGHT_YEAR} Freakin&apos;s Studio. All rights reserved.</span>
-            <span className="text-brand-border">|</span>
-            <span>Dhaka &bull; Global Operations</span>
-          </div>
+        <div className="mt-8 border-t border-[#232528]/80 pt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <p className="font-mono text-[11px]">
+            &copy; 2026 FREAKIN&apos;S STUDIO &mdash;
+            DESIGN. CREATE. PRODUCE. GROW.
+          </p>
+          <p className="font-mono text-[11px] text-[#F6F4EF]/55">
+            5% Launch Promo: 20 Nov &ndash; 15 Dec 2026 (Asia/Dhaka) &bull; 2
+            Consolidated Revisions Included
+          </p>
         </div>
       </div>
     </footer>

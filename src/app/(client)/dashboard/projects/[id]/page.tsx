@@ -1,134 +1,143 @@
-import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import {
   ProjectWorkspaceClient,
-  type WorkspaceOrder,
+  type WorkspaceAsset,
   type WorkspaceBrief,
   type WorkspaceTask,
-  type WorkspaceAsset,
 } from "./project-workspace-client";
 
-interface FullProjectRecord {
+export const instant = false;
+
+export interface WorkspaceProjectData {
   id: string;
   title: string;
   status: string;
   revisions_used: number;
   max_revisions: number;
-  orders?: WorkspaceOrder | null;
-  project_briefs?: WorkspaceBrief[];
-  project_tasks?: WorkspaceTask[];
-  project_assets?: WorkspaceAsset[];
+  brief: WorkspaceBrief | null;
+  tasks: WorkspaceTask[];
+  assets: WorkspaceAsset[];
+  annotations: {
+    id: string;
+    coord_x_percent: number;
+    coord_y_percent: number;
+    feedback_text: string;
+    resolved: boolean;
+  }[];
 }
 
-export const metadata: Metadata = {
-  title: "Project Workspace — Freakin's Studio",
-  description: "Collaborative creative production, visual proofing, revision tracking and asset delivery.",
-};
-
-export const instant = false;
-
-interface ProjectPageProps {
+export default async function ProjectWorkspacePage({
+  params,
+}: {
   params: Promise<{ id: string }>;
-}
-
-export default async function ProjectWorkspacePage({ params }: ProjectPageProps) {
+}) {
   const { id } = await params;
-  const supabase = await createClient();
+  let projectData: WorkspaceProjectData | null = null;
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  if (
+    process.env.NEXT_PUBLIC_SUPABASE_URL &&
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  ) {
+    try {
+      const supabase = await createClient();
+      const { data: prj } = await supabase
+        .from("projects")
+        .select("*")
+        .eq("id", id)
+        .single();
 
-  if (!user) {
+      if (prj) {
+        const [
+          { data: briefRow },
+          { data: taskRows },
+          { data: assetRows },
+        ] = await Promise.all([
+          supabase
+            .from("project_briefs")
+            .select("*")
+            .eq("project_id", id)
+            .maybeSingle(),
+          supabase
+            .from("project_tasks")
+            .select("*")
+            .eq("project_id", id)
+            .order("display_order", { ascending: true }),
+          supabase
+            .from("project_assets")
+            .select("*, asset_annotations(*)")
+            .eq("project_id", id)
+            .order("version_number", { ascending: false }),
+        ]);
+
+        type RawAssetRow = {
+          id: string;
+          file_name: string;
+          version_number: number;
+          storage_path?: string | null;
+          mime_type: string | null;
+          asset_annotations?: {
+            id: string;
+            coord_x_percent: number;
+            coord_y_percent: number;
+            feedback_text: string;
+            resolved: boolean;
+          }[];
+        };
+
+        const rawAssets = (assetRows as unknown as RawAssetRow[] | null) ?? [];
+        const mappedAssets: WorkspaceAsset[] = rawAssets.map((a) => ({
+          id: a.id,
+          version_label: `v${a.version_number || 1}`,
+          file_name: a.file_name,
+          storage_path: a.storage_path || `/images/portfolio/brand-identity.jpg`,
+          file_type: a.mime_type || "image/svg+xml",
+        }));
+
+        const flattenedAnnotations = rawAssets.flatMap((a) =>
+          (a.asset_annotations || []).map((ann) => ({
+            id: ann.id,
+            coord_x_percent: Number(ann.coord_x_percent),
+            coord_y_percent: Number(ann.coord_y_percent),
+            feedback_text: ann.feedback_text,
+            resolved: Boolean(ann.resolved),
+          }))
+        );
+
+        projectData = {
+          id: prj.id,
+          title: prj.title,
+          status: prj.status,
+          revisions_used: prj.revisions_used,
+          max_revisions: prj.max_revisions ?? 2,
+          brief: briefRow
+            ? {
+                brand_name: briefRow.brand_name || "",
+                objective: briefRow.objective || "",
+                audience: briefRow.audience || "",
+                platforms: briefRow.platforms || "",
+                submitted: Boolean(briefRow.submitted),
+              }
+            : null,
+          tasks: (taskRows ?? []).map((t) => ({
+            id: t.id,
+            title: t.title,
+            status: t.status as "todo" | "in_progress" | "review" | "done",
+          })),
+          assets: mappedAssets,
+          annotations: flattenedAnnotations,
+        };
+      }
+    } catch {
+      // Do not synthesize fake project data
+    }
+  }
+
+  // Gate 0 Truthful Missing Record Guard: Never fabricate synthetic projects when not found
+  if (!projectData) {
     notFound();
   }
 
-  // Fetch project from Supabase
-  const { data: project } = await supabase
-    .from("projects")
-    .select("*")
-    .eq("id", id)
-    .single();
-
-  let projectData: FullProjectRecord | null = project as unknown as FullProjectRecord | null;
-
-  if (!projectData) {
-    // If table doesn't have this row yet in unmigrated or fresh dev DB, provide clean demo state
-    projectData = {
-      id,
-      title: `Project ${id} — Creative Production Suite`,
-      status: "awaiting_brief",
-      revisions_used: 0,
-      max_revisions: 3,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      client_id: user.id,
-      order_id: `ord-${id}`,
-      project_briefs: [],
-      project_tasks: [
-        { id: "1", title: "Creative Onboarding Brief Submission", status: "todo", display_order: 1 },
-        { id: "2", title: "Production Kickoff & Creative Direction", status: "todo", display_order: 2 },
-        { id: "3", title: "Draft Deliverable Delivery & Review", status: "todo", display_order: 3 },
-        { id: "4", title: "Final Asset Handover & Archiving", status: "todo", display_order: 4 },
-      ],
-      project_assets: [
-        {
-          id: "asset-1",
-          version_label: "v1.0",
-          file_name: "Master-Design-Draft.png",
-          storage_path: "mock",
-          file_type: "image",
-          file_size_bytes: 4096000,
-          is_approved: false,
-          is_final_deliverable: false,
-          created_at: new Date().toISOString(),
-        },
-      ],
-    } as unknown as FullProjectRecord;
-  }
-
-  const proj = projectData as unknown as FullProjectRecord;
-
-  // Fetch annotations
-  const assetId = proj?.project_assets?.[0]?.id || "asset-1";
-  const { data: annotations } = await supabase
-    .from("asset_annotations")
-    .select("*")
-    .eq("asset_id", assetId);
-
-  const formattedProject = {
-    id: proj.id,
-    title: proj.title,
-    status: proj.status,
-    revisions_used: proj.revisions_used,
-    max_revisions: proj.max_revisions,
-    order: proj.orders || null,
-    brief: proj.project_briefs?.[0] || null,
-    tasks: proj.project_tasks || [],
-    assets: proj.project_assets || [],
-    annotations: (annotations || []).map((a) => ({
-      id: a.id,
-      coord_x_percent: a.coord_x_percent,
-      coord_y_percent: a.coord_y_percent,
-      feedback_text: a.feedback_text,
-      resolved: a.resolved,
-      created_at: a.created_at,
-    })),
-  };
-
-  return (
-    <div className="space-y-6">
-      <nav className="flex items-center gap-2 text-xs font-mono text-brand-muted">
-        <Link href="/dashboard" className="hover:text-brand-light transition-colors">
-          Workspace Dashboard
-        </Link>
-        <span>/</span>
-        <span className="text-brand-highlight">{formattedProject.id}</span>
-      </nav>
-
-      <ProjectWorkspaceClient project={formattedProject} />
-    </div>
-  );
+  return <ProjectWorkspaceClient project={projectData} />;
 }
+
