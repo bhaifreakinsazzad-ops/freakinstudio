@@ -1,28 +1,28 @@
-# Freakin's Studio — Creative Commerce OS
+# Freakin's Studio — Creative Office OS 2.0
 
-> AI-Powered Digital Production Studio &bull; Design. Create. Produce. Grow.
+> **DESIGN. CREATE. PRODUCE. GROW.**
 
-A full-stack creative commerce platform combining 60 canonical creative services, interactive 7-step package configuration, server-authoritative pricing, client visual proofing with canvas pin annotations, contractual revision quota governance, studio administration OS, and authentic deliverable packaging.
+A full-stack Next.js 16 + Supabase creative studio operating system uniting **6 free browser-native creative tools**, **5 Puter-login-free Studio-sponsored AI assistants**, **3 AI Micro-Product Kits (`SKU-SHOP-49`, `SKU-CAMP-99`, `SKU-BRAND-199`)**, and **13 canonical human creative services** across **4 disciplines** with **15 variants**, **5 commercial bundles**, **14 compatible add-ons**, and **2 consolidated revision rounds**.
 
-See `CLAUDE.md` for architecture details, and `docs/IMPLEMENTATION_STATUS.md` for the complete feature matrix and verification results.
+## Architecture & Key Safeguards
 
-## Stack
+- **Commercial Integrity**: Canonical Ratebook (`v2.0-pending-ratebook-v8_1`) keeps self-serve checkout gated (`quote_required`) until studio admin approves explicit BDT/USD hourly rates in Supabase. Includes the **5% Launch Promotion Window (20 Nov – 15 Dec 2026, Asia/Dhaka)** and strict **10-Minute Express** preflight + Studio Desk slot confirmation.
+- **Human + SI Creative Office**: Complete production lifecycle (`awaiting_brief` → `brief_submitted` → `in_production` → `client_review` → `revision_requested` → `revision_in_progress` → `client_approved` → `completed`), persisted `project_events` audit log, private Supabase Storage `project-assets` signed downloads + SHA-256 checksums, visual pin annotations, and a gated SI assistant review queue (`human_approved` / `rejected`).
+- **Studio-Sponsored AI Gateway**: Zero visitor Puter login required. Routes through server-side `/api/ai/generate` with signed `HttpOnly` session cookies (`fs_guest_session`), IP hash metering, BDT daily studio cap, emergency kill switch, and explicit separation between live Puter inference and `DEMO_TEMPLATE_FALLBACK`.
+- **Installable PWA**: Web App Manifest (`src/app/manifest.ts`), safe static-only Service Worker (`public/sw.js` bypassing `/api/*`, `/dashboard*`, `/admin*`, `/auth*`), and `/offline` fallback.
 
-Next.js 16 (App Router, Turbopack, React 19) · Tailwind CSS 4 · Base UI · Supabase (PostgreSQL + Auth + RLS) · Vitest · JSZip.
-
-## Getting started
+## Getting Started
 
 1. Install dependencies:
    ```bash
    npm install
    ```
-2. Configure environment:
+2. Configure environment variables:
    ```bash
    cp .env.example .env.local
    ```
-   Provide your Supabase URL and keys in `.env.local`.
-3. Apply database migrations:
-   Run the 9 migration files in `supabase/migrations/` in sequence in the Supabase SQL editor.
+   Fill in your Supabase (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`), session signing secret (`AI_GUEST_COOKIE_SECRET`), optional Puter server token (`PUTER_SERVER_TOKEN`), and payment gateway keys.
+3. Apply database migrations (`supabase/migrations/001` through `014`) in order in your Supabase SQL editor.
 4. Run the development server:
    ```bash
    npm run dev
@@ -31,20 +31,20 @@ Next.js 16 (App Router, Turbopack, React 19) · Tailwind CSS 4 · Base UI · Sup
 
 ## Scripts
 
-| Command | What it does |
+| Command | Purpose |
 |---|---|
-| `npm run dev` | Start development server |
-| `npm run build` | Next.js 16 production build |
-| `npm run lint` | ESLint check |
-| `npm run typecheck` | `tsc --noEmit` |
-| `npm run test:unit` | Vitest unit and workflow test suites |
-| `npm run test:integration` | Supabase RLS and auth isolation test suite |
-| `npm run extract:catalog` | Re-extract the 60-service catalog from `reference/legacy/` |
-| `npm run seed:catalog` | Upsert the canonical catalog into Supabase |
+| `npm run dev` | Start Next.js 16 dev server on port 3000 |
+| `npm run build` | Production Next.js build |
+| `npm run typecheck` | Strict TypeScript verification (`tsc --noEmit`) |
+| `npm run lint` | ESLint verification |
+| `npm run test:unit` | Vitest pure-logic unit tests |
+| `npm run test:node` | Native `tsx --test` pricing engine verification |
+| `npm run test:integration` | Hosted Supabase RLS & auth isolation tests (requires `.env.test`) |
+| `npm run test:e2e` | Playwright browser QA suite |
+| `npm run seed:catalog` | Seed canonical catalog records into Supabase |
 
-## Environments
+## Official Studio Touchpoints
 
-1. **Creative Storefront & Public Showcase**: `/`, `/services`, `/services/[id]`, `/portfolio`, `/case-studies`, `/about`, `/how-it-works`, `/contact`, `/faq`, `/privacy`, `/terms`, `/refund-policy`, `/revision-policy`, `/licensing-policy`.
-2. **7-Step Package Builder**: `/builder`.
-3. **Client Workspace**: `/dashboard`, `/dashboard/projects/[id]`.
-4. **Studio Admin OS**: `/admin`.
+- **WhatsApp**: `+8801778307704`
+- **Email**: `bhaifreakinstudio@gmail.com`
+- **Web**: `freakinstudio.space`

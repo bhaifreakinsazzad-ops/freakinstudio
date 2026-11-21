@@ -3,23 +3,17 @@ import type { Database } from "@/types/database.types";
 
 /**
  * Creates a privileged Supabase client strictly using the server-side
- * SUPABASE_SERVICE_ROLE_KEY.
- *
- * CRITICAL SECURITY FIX (Directive 13.0 §5):
- * Under NO circumstances does this function fall back to the publishable/anon key.
- * If the service-role key is unconfigured in the server runtime, it fails closed
- * by throwing an explicit ConfigurationError.
+ * SUPABASE_SERVICE_ROLE_KEY and NEXT_PUBLIC_SUPABASE_URL.
+ * Fails closed if either environment secret/endpoint is unconfigured.
  */
 export function createPrivilegedClient() {
-  const supabaseUrl =
-    process.env.NEXT_PUBLIC_SUPABASE_URL ||
-    "https://rvvwhlyqscxtwyqsvdbx.supabase.co";
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceRoleKey =
     process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
 
-  if (!serviceRoleKey) {
+  if (!supabaseUrl || !serviceRoleKey) {
     throw new Error(
-      "CONFIGURATION_ERROR: SUPABASE_SERVICE_ROLE_KEY is required for privileged server-side operations and financial settlements. Falling back to anonymous or public context is strictly blocked."
+      "CONFIGURATION_ERROR: NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required for privileged server-side operations. Falling back to anonymous or hardcoded context is blocked."
     );
   }
 
@@ -29,4 +23,12 @@ export function createPrivilegedClient() {
       autoRefreshToken: false,
     },
   });
+}
+
+export function tryPrivilegedClient() {
+  try {
+    return createPrivilegedClient();
+  } catch {
+    return null;
+  }
 }

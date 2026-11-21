@@ -15,6 +15,11 @@ import {
   CANONICAL_CONCEPT_WORKS,
 } from "../catalog";
 
+const APPROVED_FIXTURE_SERVICES = CANONICAL_SERVICES.map((s) => ({
+  ...s,
+  pricing_status: "approved" as const,
+}));
+
 describe("Creative Office OS 2.0 — Pure Logic Node Test Suite", () => {
   it("verifies exact 4/13/15/5/14 catalog counts and 3 AI Micro-Kits", () => {
     assert.equal(CANONICAL_DISCIPLINES.length, 4);
@@ -39,24 +44,32 @@ describe("Creative Office OS 2.0 — Pure Logic Node Test Suite", () => {
       serviceConfigs: { "SRV-01": { quantity: 1, rush: true } },
       selectedAddOns: { "SRV-01": ["ADD-01"] },
       currency: "BDT",
-      catalogServices: CANONICAL_SERVICES,
+      catalogServices: APPROVED_FIXTURE_SERVICES,
       catalogAddOns: CANONICAL_ADDONS,
       evaluationDate: "2026-11-25",
     });
 
-    assert.equal(res.totalScopedHours, 8); // 6h base + 2h ADD-01
-    assert.equal(res.rushSurchargeBDT, 0); // +35% retired
+    assert.equal(res.totalScopedHours, 8);
+    assert.equal(res.rushSurchargeBDT, 0);
     assert.equal(res.subtotalBDT, 9000);
     assert.equal(res.addOnsTotalBDT, 3000);
-    assert.equal(res.promoDiscountBDT, 600); // 5% of 12,000
+    assert.equal(res.promoDiscountBDT, 600);
     assert.equal(res.finalBDT, 11400);
   });
 
-  it("gates 10-minute express delivery strictly to SRV-02, SRV-05, and SRV-13", () => {
+  it("gates 10-minute express delivery strictly to SRV-02/05/13 with confirmed studio desk slot", () => {
+    const unconfirmed = evaluateExpress10MinEligibility({
+      serviceId: "SRV-05",
+      sourceFilesReady: true,
+      singleMicroEditConfirmed: true,
+    });
+    assert.equal(unconfirmed.eligible, false);
+
     const ok = evaluateExpress10MinEligibility({
       serviceId: "SRV-05",
       sourceFilesReady: true,
       singleMicroEditConfirmed: true,
+      studioSlotConfirmed: true,
     });
     assert.equal(ok.eligible, true);
 
@@ -64,6 +77,7 @@ describe("Creative Office OS 2.0 — Pure Logic Node Test Suite", () => {
       serviceId: "SRV-10",
       sourceFilesReady: true,
       singleMicroEditConfirmed: true,
+      studioSlotConfirmed: true,
     });
     assert.equal(denied.eligible, false);
   });

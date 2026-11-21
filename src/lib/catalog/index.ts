@@ -22,14 +22,16 @@ import legacyServicesData from "../../../supabase/seed/data/services.json";
  * - 3 AI Micro-Kits (SKU-SHOP-49, SKU-CAMP-99, SKU-BRAND-199)
  * - 4 Truthful Concept Works (CW-01 to CW-04)
  *
- * Hourly Pricing Baseline:
- * - Canonical Studio Hourly Reference Rate: 1,500 BDT/hr ($15 USD/hr)
- * - 2 Consolidated Revisions included across all services & bundles
+ * Commercial Integrity Note:
+ * - Reference hourly baseline (1,500 BDT/hr / $15 USD/hr) is preserved for estimation.
+ * - Default pricing_status is 'quote_required' until Owner Ratebook v8/v8.1 is
+ *   explicitly approved in Supabase (pricing_status = 'approved' AND ratebook_approved = true).
  */
 
 export const CANONICAL_HOURLY_RATE_BDT = 1500;
 export const CANONICAL_HOURLY_RATE_USD = 15;
-export const RATEBOOK_VERSION = "v2.0-canonical-hourly-2026";
+export const RATEBOOK_VERSION = "v2.0-pending-ratebook-v8_1";
+export const RATEBOOK_APPROVED = false;
 
 export const CANONICAL_DISCIPLINES: ServiceCategory[] = [
   {
@@ -95,7 +97,7 @@ export const CANONICAL_SERVICES: Service[] = [
     estimated_hours: 6,
     days: 3,
     revisions: 2,
-    pricing_status: "approved",
+    pricing_status: "quote_required",
     express_eligible: false,
     included: [
       "Primary logomark & wordmark lockup",
@@ -124,7 +126,7 @@ export const CANONICAL_SERVICES: Service[] = [
     estimated_hours: 2,
     days: 1,
     revisions: 2,
-    pricing_status: "approved",
+    pricing_status: "quote_required",
     express_eligible: true,
     express_rule:
       "10-Min Express eligible ONLY for single-file vector trace/color fix with ready source file.",
@@ -152,7 +154,7 @@ export const CANONICAL_SERVICES: Service[] = [
     estimated_hours: 10,
     days: 5,
     revisions: 2,
-    pricing_status: "approved",
+    pricing_status: "quote_required",
     express_eligible: false,
     included: [
       "Logo suite (Primary, Secondary, Submark)",
@@ -178,7 +180,7 @@ export const CANONICAL_SERVICES: Service[] = [
     estimated_hours: 3,
     days: 2,
     revisions: 2,
-    pricing_status: "approved",
+    pricing_status: "quote_required",
     express_eligible: false,
     included: [
       "Double-sided print-ready business card",
@@ -204,7 +206,7 @@ export const CANONICAL_SERVICES: Service[] = [
     estimated_hours: 2,
     days: 1,
     revisions: 2,
-    pricing_status: "approved",
+    pricing_status: "quote_required",
     express_eligible: true,
     express_rule:
       "10-Min Express eligible ONLY for text/price swap or crop adaptation on existing studio file.",
@@ -232,7 +234,7 @@ export const CANONICAL_SERVICES: Service[] = [
     estimated_hours: 4,
     days: 2,
     revisions: 2,
-    pricing_status: "approved",
+    pricing_status: "quote_required",
     express_eligible: false,
     included: [
       "Up to 6 seamless swipe carousel frames",
@@ -258,7 +260,7 @@ export const CANONICAL_SERVICES: Service[] = [
     estimated_hours: 5,
     days: 2,
     revisions: 2,
-    pricing_status: "approved",
+    pricing_status: "quote_required",
     express_eligible: false,
     included: [
       "3 visual hook variations for A/B testing",
@@ -284,7 +286,7 @@ export const CANONICAL_SERVICES: Service[] = [
     estimated_hours: 3,
     days: 2,
     revisions: 2,
-    pricing_status: "approved",
+    pricing_status: "quote_required",
     express_eligible: false,
     included: [
       "Profile avatar lockup",
@@ -310,7 +312,7 @@ export const CANONICAL_SERVICES: Service[] = [
     estimated_hours: 3,
     days: 2,
     revisions: 2,
-    pricing_status: "approved",
+    pricing_status: "quote_required",
     express_eligible: false,
     included: [
       "Single or double-sided print layout",
@@ -336,7 +338,7 @@ export const CANONICAL_SERVICES: Service[] = [
     estimated_hours: 7,
     days: 4,
     revisions: 2,
-    pricing_status: "approved",
+    pricing_status: "quote_required",
     express_eligible: false,
     included: [
       "Print-ready label or box dieline artwork",
@@ -365,7 +367,7 @@ export const CANONICAL_SERVICES: Service[] = [
     estimated_hours: 8,
     days: 4,
     revisions: 2,
-    pricing_status: "approved",
+    pricing_status: "quote_required",
     express_eligible: false,
     included: [
       "Up to 12 custom-designed master slides",
@@ -391,7 +393,7 @@ export const CANONICAL_SERVICES: Service[] = [
     estimated_hours: 5,
     days: 3,
     revisions: 2,
-    pricing_status: "approved",
+    pricing_status: "quote_required",
     express_eligible: false,
     included: [
       "Up to 60s vertical 9:16 edit from client footage",
@@ -417,7 +419,7 @@ export const CANONICAL_SERVICES: Service[] = [
     estimated_hours: 6,
     days: 3,
     revisions: 2,
-    pricing_status: "approved",
+    pricing_status: "quote_required",
     express_eligible: true,
     express_rule:
       "10-Min Express eligible ONLY for end-slate text/CTA update on existing studio motion project.",
@@ -591,6 +593,7 @@ export const CANONICAL_BUNDLES: CommercialBundle[] = [
     ],
     baseBdt: 11 * CANONICAL_HOURLY_RATE_BDT,
     baseUsd: 11 * CANONICAL_HOURLY_RATE_USD,
+    pricingStatus: "quote_required",
   },
   {
     id: "BND-02",
@@ -609,6 +612,7 @@ export const CANONICAL_BUNDLES: CommercialBundle[] = [
     ],
     baseBdt: 16 * CANONICAL_HOURLY_RATE_BDT,
     baseUsd: 16 * CANONICAL_HOURLY_RATE_USD,
+    pricingStatus: "quote_required",
   },
   {
     id: "BND-03",
@@ -627,6 +631,7 @@ export const CANONICAL_BUNDLES: CommercialBundle[] = [
     ],
     baseBdt: 11 * CANONICAL_HOURLY_RATE_BDT,
     baseUsd: 11 * CANONICAL_HOURLY_RATE_USD,
+    pricingStatus: "quote_required",
   },
   {
     id: "BND-04",
@@ -645,6 +650,7 @@ export const CANONICAL_BUNDLES: CommercialBundle[] = [
     ],
     baseBdt: 18 * CANONICAL_HOURLY_RATE_BDT,
     baseUsd: 18 * CANONICAL_HOURLY_RATE_USD,
+    pricingStatus: "quote_required",
   },
   {
     id: "BND-05",
@@ -663,6 +669,7 @@ export const CANONICAL_BUNDLES: CommercialBundle[] = [
     ],
     baseBdt: 16 * CANONICAL_HOURLY_RATE_BDT,
     baseUsd: 16 * CANONICAL_HOURLY_RATE_USD,
+    pricingStatus: "quote_required",
   },
 ];
 
@@ -864,6 +871,7 @@ export const CANONICAL_AI_MICRO_KITS: AIMicroKit[] = [
     priceBdt: 49,
     priceUsd: 1,
     statusLabel: "Proposed Micro-Product Test Tier • Demo Contract Preview",
+    checkoutEnabled: false,
     targetAudience:
       "F-Commerce & Boutique D2C Sellers launching a new product SKU.",
     includedOutputs: [
@@ -887,6 +895,7 @@ export const CANONICAL_AI_MICRO_KITS: AIMicroKit[] = [
     priceBdt: 99,
     priceUsd: 2,
     statusLabel: "Proposed Micro-Product Test Tier • Demo Contract Preview",
+    checkoutEnabled: false,
     targetAudience:
       "Growth Marketers & Agencies preparing a seasonal or flash-sale campaign.",
     includedOutputs: [
@@ -910,6 +919,7 @@ export const CANONICAL_AI_MICRO_KITS: AIMicroKit[] = [
     priceBdt: 199,
     priceUsd: 3,
     statusLabel: "Proposed Micro-Product Test Tier • Demo Contract Preview",
+    checkoutEnabled: false,
     targetAudience:
       "Early Founders clarifying brand positioning before commissioning SRV-01 or SRV-03.",
     includedOutputs: [
@@ -1117,7 +1127,7 @@ export function getServiceConfigSchema(serviceId: string): ServiceConfigSchema {
       quantityLabel: "Number of Video / Motion Deliverables",
       rushAvailable: false,
       express10MinEligible: Boolean(srv?.express_eligible),
-      expressRule: srv?.express_rule,
+      expressRule: srv?.express_rule ?? undefined,
     };
   }
 
@@ -1136,7 +1146,7 @@ export function getServiceConfigSchema(serviceId: string): ServiceConfigSchema {
       quantityLabel: "Identity System Scope Units",
       rushAvailable: false,
       express10MinEligible: Boolean(srv?.express_eligible),
-      expressRule: srv?.express_rule,
+      expressRule: srv?.express_rule ?? undefined,
     };
   }
 
@@ -1155,7 +1165,7 @@ export function getServiceConfigSchema(serviceId: string): ServiceConfigSchema {
       quantityLabel: "Number of Creative Sets",
       rushAvailable: false,
       express10MinEligible: Boolean(srv?.express_eligible),
-      expressRule: srv?.express_rule,
+      expressRule: srv?.express_rule ?? undefined,
     };
   }
 
@@ -1173,21 +1183,90 @@ export function getServiceConfigSchema(serviceId: string): ServiceConfigSchema {
     quantityLabel: "Deliverable Units / Sets",
     rushAvailable: false,
     express10MinEligible: Boolean(srv?.express_eligible),
-    expressRule: srv?.express_rule,
+    expressRule: srv?.express_rule ?? undefined,
   };
+}
+
+async function createPublicCatalogClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !anon) return null;
+  const { createClient } = await import("@supabase/supabase-js");
+  return createClient(url, anon, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
 }
 
 /**
  * Returns the 4 approved Creative Disciplines (`DISC-01` to `DISC-04`).
  */
 export async function getCatalogCategories(): Promise<ServiceCategory[]> {
+  try {
+    const supabase = await createPublicCatalogClient();
+    if (supabase) {
+      const { data, error } = await supabase
+        .from("service_categories")
+        .select("id, code, name, name_bn, description, sort_order, active")
+        .eq("active", true)
+        .order("sort_order", { ascending: true });
+      if (!error && data && data.length > 0) {
+        return data.map((row) => {
+          const fallback = CANONICAL_DISCIPLINES.find((d) => d.id === row.id);
+          return {
+            ...(fallback || {}),
+            id: row.id,
+            code: row.code || fallback?.code,
+            name: row.name,
+            name_bn: row.name_bn ?? fallback?.name_bn,
+            description: row.description ?? fallback?.description,
+            summary: row.description ?? fallback?.summary,
+            sort_order: row.sort_order,
+            display_order: row.sort_order,
+          };
+        });
+      }
+    }
+  } catch {
+    // Clean fallback to canonical definitions if DB is offline during static generation
+  }
   return CANONICAL_DISCIPLINES;
 }
 
 /**
  * Returns the 13 approved Core Creative Services (`SRV-01` to `SRV-13`).
+ * When Supabase is configured, DB pricing_status, base_bdt, base_usd, and ratebook_approved override
+ * static defaults so owner-approved Ratebook v8/v8.1 rows unlock checkout dynamically.
  */
 export async function getCatalogServices(): Promise<Service[]> {
+  try {
+    const supabase = await createPublicCatalogClient();
+    if (supabase) {
+      const { data, error } = await supabase
+        .from("services")
+        .select(
+          "id, code, category_id, title, title_bn, base_bdt, base_usd, estimated_hours, days, revisions, pricing_status, express_eligible, express_rule, summary, ratebook_version, ratebook_approved, active, created_at, updated_at"
+        )
+        .eq("active", true)
+        .order("id", { ascending: true });
+      if (!error && data && data.length > 0) {
+        return data.map((row) => {
+          const fallback = CANONICAL_SERVICES.find((s) => s.id === row.id);
+          const dbApproved =
+            row.pricing_status === "approved" && Boolean(row.ratebook_approved);
+          return {
+            ...(fallback || {}),
+            ...row,
+            code: row.code ?? fallback?.code,
+            discipline_id: row.category_id,
+            pricing_status: dbApproved ? "approved" : "quote_required",
+            ratebook_approved: Boolean(row.ratebook_approved),
+          } as Service;
+        });
+      }
+    }
+  } catch {
+    // Fallback to canonical quote-gated defaults
+  }
   return CANONICAL_SERVICES;
 }
 
@@ -1210,6 +1289,29 @@ export function getCatalogBundles(): CommercialBundle[] {
  * Returns the 14 approved Optional Add-ons (`ADD-01` to `ADD-14`).
  */
 export async function getAllAddOns(): Promise<AddOn[]> {
+  try {
+    const supabase = await createPublicCatalogClient();
+    if (supabase) {
+      const { data, error } = await supabase
+        .from("add_ons")
+        .select("id, code, label, label_bn, unit_price_bdt, unit_price_usd, extra_hours, summary, active")
+        .eq("active", true)
+        .order("id", { ascending: true });
+      if (!error && data && data.length > 0) {
+        return data.map((row) => {
+          const fallback = CANONICAL_ADDONS.find((a) => a.id === row.id);
+          return {
+            ...(fallback || {}),
+            ...row,
+            code: row.code ?? fallback?.code,
+            compatible_services: fallback?.compatible_services,
+          } as AddOn;
+        });
+      }
+    }
+  } catch {
+    // Fallback to canonical add-ons
+  }
   return CANONICAL_ADDONS;
 }
 
@@ -1231,12 +1333,13 @@ export function getCatalogConceptWorks(): ConceptWork[] {
  * Returns compatible add-ons for a specific service ID.
  */
 export async function getAddOnsForService(serviceId: string): Promise<AddOn[]> {
+  const allAddOns = await getAllAddOns();
   const addonIds = CANONICAL_SERVICE_ADDONS_MAP[serviceId] || [];
   if (addonIds.length === 0) {
-    return CANONICAL_ADDONS.slice(0, 4);
+    return allAddOns.slice(0, 4);
   }
   const idSet = new Set(addonIds);
-  return CANONICAL_ADDONS.filter((a) => idSet.has(a.id));
+  return allAddOns.filter((a) => idSet.has(a.id));
 }
 
 /**
@@ -1252,12 +1355,14 @@ export function getAllServiceAddOnsMap(): Record<string, string[]> {
 export async function getServiceById(
   id: string
 ): Promise<ServiceWithAddOns | null> {
-  const canonicalService = CANONICAL_SERVICES.find(
+  const services = await getCatalogServices();
+  const categories = await getCatalogCategories();
+  const canonicalService = services.find(
     (s) => s.id.toUpperCase() === id.toUpperCase()
   );
 
   if (canonicalService) {
-    const category = CANONICAL_DISCIPLINES.find(
+    const category = categories.find(
       (c) => c.id === canonicalService.category_id
     );
     const addOns = await getAddOnsForService(canonicalService.id);
@@ -1280,6 +1385,7 @@ export async function getServiceById(
     );
     return {
       ...legacyService,
+      pricing_status: "quote_required",
       category,
       addOns: CANONICAL_ADDONS.slice(0, 4),
       variants: [],

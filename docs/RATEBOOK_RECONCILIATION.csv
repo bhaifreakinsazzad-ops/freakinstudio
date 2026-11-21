@@ -1,0 +1,55 @@
+type,id,discipline_or_parent,title,estimated_hours,hour_multiplier_or_scope,reference_bdt,reference_usd,owner_ratebook_status,checkout_gate,notes
+DISCIPLINE,DISC-01,,Brand & Visual Identity,,,,,APPROVED_TAXONOMY,N/A,Canonical 4-discipline structure (SRV-01..SRV-04)
+DISCIPLINE,DISC-02,,Social Media & Campaign Creative,,,,,APPROVED_TAXONOMY,N/A,Canonical 4-discipline structure (SRV-05..SRV-08)
+DISCIPLINE,DISC-03,,Commercial Graphic & Print Design,,,,,APPROVED_TAXONOMY,N/A,Canonical 4-discipline structure (SRV-09..SRV-11)
+DISCIPLINE,DISC-04,,Motion Reels & Short-Form Video,,,,,APPROVED_TAXONOMY,N/A,Canonical 4-discipline structure (SRV-12..SRV-13)
+SERVICE,SRV-01,DISC-01,Logo Design & Mark Creation,6,Base scope (3d / 2 revisions),9000,90,PENDING_RATEBOOK_V8_1,QUOTE_REQUIRED,Reference hours=6h; uniform 1500 BDT/$15 rate is unverified — gated to Request Quote until Ratebook v8/v8.1 import
+SERVICE,SRV-02,DISC-01,Logo Redesign / Vector Cleanup,2,Base scope (1d / 2 revisions) | 10-Min Express micro-edit eligible,3000,30,PENDING_RATEBOOK_V8_1,QUOTE_REQUIRED,Reference hours=2h; express gated to single open-source micro-edit + confirmed desk slot
+SERVICE,SRV-03,DISC-01,Brand Identity Starter System,10,Base scope (5d / 2 revisions),15000,150,PENDING_RATEBOOK_V8_1,QUOTE_REQUIRED,Reference hours=10h; uniform rate unverified
+SERVICE,SRV-04,DISC-01,Business Card & Stationery Suite,3,Base scope (2d / 2 revisions),4500,45,PENDING_RATEBOOK_V8_1,QUOTE_REQUIRED,Reference hours=3h; uniform rate unverified
+SERVICE,SRV-05,DISC-02,Social Media Single Post Creative,2,Base scope (1d / 2 revisions) | 10-Min Express micro-edit eligible,3000,30,PENDING_RATEBOOK_V8_1,QUOTE_REQUIRED,Reference hours=2h; express gated to text/crop swap on existing file + confirmed desk slot
+SERVICE,SRV-06,DISC-02,Carousel & Story Design Set,4,Base scope (2d / 2 revisions),6000,60,PENDING_RATEBOOK_V8_1,QUOTE_REQUIRED,Reference hours=4h; uniform rate unverified
+SERVICE,SRV-07,DISC-02,Paid Ad Creative Variations,5,Base scope (2d / 2 revisions),7500,75,PENDING_RATEBOOK_V8_1,QUOTE_REQUIRED,Reference hours=5h; uniform rate unverified
+SERVICE,SRV-08,DISC-02,Social Channel Banner & Profile Kit,3,Base scope (2d / 2 revisions),4500,45,PENDING_RATEBOOK_V8_1,QUOTE_REQUIRED,Reference hours=3h; uniform rate unverified
+SERVICE,SRV-09,DISC-03,Poster Flyer & Print Collateral,3,Base scope (2d / 2 revisions),4500,45,PENDING_RATEBOOK_V8_1,QUOTE_REQUIRED,Reference hours=3h; uniform rate unverified
+SERVICE,SRV-10,DISC-03,Packaging & Label Design,7,Base scope (4d / 2 revisions),10500,105,PENDING_RATEBOOK_V8_1,QUOTE_REQUIRED,Reference hours=7h; uniform rate unverified
+SERVICE,SRV-11,DISC-03,Presentation & Pitch Deck Design,8,Base scope (4d / 2 revisions),12000,120,PENDING_RATEBOOK_V8_1,QUOTE_REQUIRED,Reference hours=8h; uniform rate unverified
+SERVICE,SRV-12,DISC-04,Short-Form Video / Reel Edit,5,Base scope (3d / 2 revisions),7500,75,PENDING_RATEBOOK_V8_1,QUOTE_REQUIRED,Reference hours=5h; uniform rate unverified
+SERVICE,SRV-13,DISC-04,Motion Graphic Ad & Logo Animation,6,Base scope (3d / 2 revisions) | 10-Min Express micro-edit eligible,9000,90,PENDING_RATEBOOK_V8_1,QUOTE_REQUIRED,Reference hours=6h; express gated to end-slate update + confirmed desk slot
+VARIANT,VAR-01,SRV-01,Single Concept Wordmark,4,0.75x,6750,67.5,PENDING_RATEBOOK_V8_1,QUOTE_REQUIRED,Scoped variant (VAR-01)
+VARIANT,VAR-02,SRV-01,Dual Concept Mark + Monogram,6,1.0x,9000,90,PENDING_RATEBOOK_V8_1,QUOTE_REQUIRED,Scoped variant (VAR-02)
+VARIANT,VAR-03,SRV-02,10-Min Express Micro Vector Fix,1,0.5x,1500,15,PENDING_RATEBOOK_V8_1,QUOTE_REQUIRED,Scoped variant (VAR-03)
+VARIANT,VAR-04,SRV-03,Core Identity Sheet (6 Pages),10,1.0x,15000,150,PENDING_RATEBOOK_V8_1,QUOTE_REQUIRED,Scoped variant (VAR-04)
+VARIANT,VAR-05,SRV-03,Extended Identity Book (12 Pages),14,1.4x,21000,210,PENDING_RATEBOOK_V8_1,QUOTE_REQUIRED,Scoped variant (VAR-05)
+VARIANT,VAR-06,SRV-04,Card + Letterhead Duo,3,1.0x,4500,45,PENDING_RATEBOOK_V8_1,QUOTE_REQUIRED,Scoped variant (VAR-06)
+VARIANT,VAR-07,SRV-05,Single Platform Post (1:1 or 4:5),2,1.0x,3000,30,PENDING_RATEBOOK_V8_1,QUOTE_REQUIRED,Scoped variant (VAR-07)
+VARIANT,VAR-08,SRV-06,6-Slide Carousel Set,4,1.0x,6000,60,PENDING_RATEBOOK_V8_1,QUOTE_REQUIRED,Scoped variant (VAR-08)
+VARIANT,VAR-09,SRV-06,10-Slide Authority Carousel,6,1.5x,9000,90,PENDING_RATEBOOK_V8_1,QUOTE_REQUIRED,Scoped variant (VAR-09)
+VARIANT,VAR-10,SRV-07,3-Hook Ad Test Pack,5,1.0x,7500,75,PENDING_RATEBOOK_V8_1,QUOTE_REQUIRED,Scoped variant (VAR-10)
+VARIANT,VAR-11,SRV-09,Single-Sided Poster / Flyer,3,1.0x,4500,45,PENDING_RATEBOOK_V8_1,QUOTE_REQUIRED,Scoped variant (VAR-11)
+VARIANT,VAR-12,SRV-10,Flat Pouch / Bottle Label,7,1.0x,10500,105,PENDING_RATEBOOK_V8_1,QUOTE_REQUIRED,Scoped variant (VAR-12)
+VARIANT,VAR-13,SRV-10,Rigid Box Full Dieline + Foil Spec,10,1.4x,15000,150,PENDING_RATEBOOK_V8_1,QUOTE_REQUIRED,Scoped variant (VAR-13)
+VARIANT,VAR-14,SRV-11,12-Slide Executive Deck,8,1.0x,12000,120,PENDING_RATEBOOK_V8_1,QUOTE_REQUIRED,Scoped variant (VAR-14)
+VARIANT,VAR-15,SRV-12,Up to 60s Vertical Reel Edit,5,1.0x,7500,75,PENDING_RATEBOOK_V8_1,QUOTE_REQUIRED,Scoped variant (VAR-15)
+BUNDLE,BND-01,SRV-01+SRV-04+SRV-08,Brand Launch Starter Pack,11,5-6 Days / 2 Revisions,16500,165,PENDING_RATEBOOK_V8_1,QUOTE_REQUIRED,Component hour sum: 6+3+3=12h catalog sum vs 11h bundle spec — reconciled in studio quote
+BUNDLE,BND-02,SRV-05+SRV-06+SRV-12,Social Growth Monthly Pulse,16,7-10 Days / 2 Revisions,24000,240,PENDING_RATEBOOK_V8_1,QUOTE_REQUIRED,Bundle scoped hours = 16h
+BUNDLE,BND-03,SRV-07+SRV-13,Performance Ad Campaign Pod,11,4-5 Days / 2 Revisions,16500,165,PENDING_RATEBOOK_V8_1,QUOTE_REQUIRED,Bundle scoped hours = 11h
+BUNDLE,BND-04,SRV-03+SRV-10+SRV-09,Retail Packaging & Shelf Suite,18,7-9 Days / 2 Revisions,27000,270,PENDING_RATEBOOK_V8_1,QUOTE_REQUIRED,Bundle scoped hours = 18h
+BUNDLE,BND-05,SRV-03+SRV-11,Founder Pitch & Fundraising Kit,16,6-8 Days / 2 Revisions,24000,240,PENDING_RATEBOOK_V8_1,QUOTE_REQUIRED,Bundle scoped hours = 16h
+ADDON,ADD-01,ALL_EXCEPT_02_12_13,Editable Open Source Files (AI / PSD / FIG),2,Fixed scope extension,3000,30,PENDING_RATEBOOK_V8_1,QUOTE_REQUIRED,Reference extraHours=2h
+ADDON,ADD-02,SRV-05/06/07/12/13,Extra Aspect Ratio Adaptation (9:16 / 16:9 / 1:1),1,Fixed scope extension,1500,15,PENDING_RATEBOOK_V8_1,QUOTE_REQUIRED,Reference extraHours=1h
+ADDON,ADD-03,SRV-05/06/07/09/10/11,Bilingual Copy Layout (Bangla + English),1,Fixed scope extension,1500,15,PENDING_RATEBOOK_V8_1,QUOTE_REQUIRED,Reference extraHours=1h
+ADDON,ADD-04,ALL_13_SERVICES,Additional Consolidated Revision Round (+1),1.5,Fixed scope extension,2250,22.5,PENDING_RATEBOOK_V8_1,QUOTE_REQUIRED,Reference extraHours=1.5h
+ADDON,ADD-05,SRV-04/09/10,Print Pre-Press Foil & Spot-UV Separation,1.5,Fixed scope extension,2250,22.5,PENDING_RATEBOOK_V8_1,QUOTE_REQUIRED,Reference extraHours=1.5h
+ADDON,ADD-06,SRV-01/03/04/10,3D Studio Mockup Render Pack (3 Angles),2,Fixed scope extension,3000,30,PENDING_RATEBOOK_V8_1,QUOTE_REQUIRED,Reference extraHours=2h
+ADDON,ADD-07,SRV-12/13,Animated Subtitles & SRT Caption File,1,Fixed scope extension,1500,15,PENDING_RATEBOOK_V8_1,QUOTE_REQUIRED,Reference extraHours=1h
+ADDON,ADD-08,SRV-12/13,Custom Thumbnail & Cover Frame,1,Fixed scope extension,1500,15,PENDING_RATEBOOK_V8_1,QUOTE_REQUIRED,Reference extraHours=1h
+ADDON,ADD-09,SRV-11,Extra 4 Presentation Slides,2.5,Fixed scope extension,3750,37.5,PENDING_RATEBOOK_V8_1,QUOTE_REQUIRED,Reference extraHours=2.5h
+ADDON,ADD-10,SRV-06,Extra 2 Carousel Slides,1,Fixed scope extension,1500,15,PENDING_RATEBOOK_V8_1,QUOTE_REQUIRED,Reference extraHours=1h
+ADDON,ADD-11,SRV-05/06/07,Social Post Caption & Hashtag Matrix,1,Fixed scope extension,1500,15,PENDING_RATEBOOK_V8_1,QUOTE_REQUIRED,Reference extraHours=1h
+ADDON,ADD-12,SRV-10,SKU Flavor / Colorway Variant Adaptation,2,Fixed scope extension,3000,30,PENDING_RATEBOOK_V8_1,QUOTE_REQUIRED,Reference extraHours=2h
+ADDON,ADD-13,SRV-01/03,Brand Color Accessibility & WCAG Audit Sheet,1.5,Fixed scope extension,2250,22.5,PENDING_RATEBOOK_V8_1,QUOTE_REQUIRED,Reference extraHours=1.5h
+ADDON,ADD-14,SRV-02/04/05/08/09,Priority Same-Day Studio Slot (Subject to Confirmation),2,Fixed scope extension,3000,30,PENDING_RATEBOOK_V8_1,QUOTE_REQUIRED,Reference extraHours=2h
+MICRO_KIT,SKU-SHOP-49,AI_MICRO_PRODUCTS,Shop Starter AI Kit,0,Proposed SKU (title+desc+3 captions+3 hooks+export),49,1,PROPOSED_PRICE_TEST,MERCHANT_GATE,Demo/entitlement preview until live payment webhook + Puter metering verified
+MICRO_KIT,SKU-CAMP-99,AI_MICRO_PRODUCTS,Campaign Ready AI Kit,0,Proposed SKU (5 hooks+3 captions+2 angles+worksheet),99,2,PROPOSED_PRICE_TEST,MERCHANT_GATE,Demo/entitlement preview until live payment webhook + Puter metering verified
+MICRO_KIT,SKU-BRAND-199,AI_MICRO_PRODUCTS,Brand Mini AI Kit,0,Proposed SKU (brief+3 naming+taglines+palette+bio+PDF),199,3,PROPOSED_PRICE_TEST,MERCHANT_GATE,Demo/entitlement preview until live payment webhook + Puter metering verified

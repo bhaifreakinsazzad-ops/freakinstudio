@@ -19,6 +19,7 @@ interface DashboardClientProps {
   projects: ClientProjectSummary[];
   orders: ClientOrderSummary[];
   quotes: ClientQuoteSummary[];
+  dbLoadError?: string | null;
 }
 
 export function DashboardClient({
@@ -26,6 +27,7 @@ export function DashboardClient({
   projects,
   orders,
   quotes,
+  dbLoadError,
 }: DashboardClientProps) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<
@@ -80,6 +82,12 @@ export function DashboardClient({
           className="cyber-glow bg-[#D9BD81] hover:bg-[#D9BD81]/90 text-[#090A0A] font-semibold text-xs font-mono shrink-0"
         />
       </div>
+
+      {dbLoadError && (
+        <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-xs font-mono text-amber-200">
+          Live database notice: {dbLoadError} You can still explore the DEMO DATA Creative Office sandbox below.
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex flex-wrap gap-2 border-b border-[#232528] pb-3">
@@ -236,7 +244,7 @@ export function DashboardClient({
                 {orders.map((ord) => (
                   <tr key={ord.id}>
                     <td className="p-4 font-bold text-[#F6F4EF]">
-                      {ord.id.slice(0, 12)}
+                      {ord.order_ref}
                     </td>
                     <td className="p-4">
                       <span
@@ -322,7 +330,7 @@ export function DashboardClient({
                     {quotes.map((q) => (
                       <tr key={q.id}>
                         <td className="p-4 font-bold text-[#F6F4EF]">
-                          {q.id.slice(0, 12)}
+                          {q.quote_ref}
                         </td>
                         <td className="p-4">
                           <span className="px-2 py-0.5 rounded uppercase text-[10px] border border-[#D9BD81]/30 bg-[#D9BD81]/10 text-[#D9BD81]">

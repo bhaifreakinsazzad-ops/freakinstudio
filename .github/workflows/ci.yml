@@ -1,0 +1,121 @@
+name: Creative Office OS 2.0 CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [feat/**, fix/**]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality-and-unit:
+    name: Typecheck, Lint, Unit & Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies cleanly
+        run: npm ci
+
+      - name: TypeScript typecheck
+        run: npm run typecheck
+
+      - name: ESLint check
+        run: npm run lint
+
+      - name: Vitest unit suite
+        run: npm run test:unit
+
+      - name: Node pure-logic suite
+        run: npm run test:node
+
+      - name: Production Next.js build
+        run: npm run build
+
+  security-audit:
+    name: Dependency & Secret Hygiene
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Audit npm dependencies
+        run: npm audit --audit-level=high || true
+
+      - name: Verify internal planning docs absent from public/
+        run: |
+          if [ -d "public/assets/aistudio" ]; then
+            echo "ERROR: public/assets/aistudio must not be exposed publicly"
+            exit 1
+          fi
+
+  e2e-chromium:
+    name: Playwright Browser Verification (1440px & 360px)
+    runs-on: ubuntu-latest
+    needs: quality-and-unit
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chromium for Playwright
+        run: npx playwright install --with-deps chromium
+
+      - name: Build production bundle
+        run: npm run build
+
+      - name: Run Playwright E2E suite
+        run: npm run test:e2e
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-results
+          path: test-results/
+          retention-days: 7
+
+  staging-integration:
+    name: Supabase Staging RLS & Integration Suite
+    runs-on: ubuntu-latest
+    needs: quality-and-unit
+    if: ${{ secrets.STAGING_SUPABASE_URL != '' }}
+    environment:
+      name: staging
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Supabase RLS & lifecycle integration tests
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.STAGING_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
+        run: npm run test:integration

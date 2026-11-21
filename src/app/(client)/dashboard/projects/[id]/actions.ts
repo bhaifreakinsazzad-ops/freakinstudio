@@ -11,17 +11,35 @@ async function verifyProjectAccess(projectId: string, requireOwnerOnly = false) 
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return { authorized: false, error: "Authentication required", user: null, project: null, supabase };
+    return {
+      authorized: false,
+      error: "Authentication required",
+      user: null,
+      project: null,
+      supabase,
+      isOwner: false,
+      isAdmin: false,
+    };
   }
 
   const { data: project, error: prjErr } = await supabase
     .from("projects")
-    .select("id, client_id, status, revisions_used, max_revisions, title, order_id")
+    .select(
+      "id, client_id, assigned_pm_id, assigned_designer_id, assigned_to, status, revisions_used, max_revisions, title, order_id"
+    )
     .eq("id", projectId)
     .single();
 
   if (prjErr || !project) {
-    return { authorized: false, error: "Project not found", user, project: null, supabase };
+    return {
+      authorized: false,
+      error: "Project not found",
+      user,
+      project: null,
+      supabase,
+      isOwner: false,
+      isAdmin: false,
+    };
   }
 
   const { data: profile } = await supabase
@@ -32,18 +50,44 @@ async function verifyProjectAccess(projectId: string, requireOwnerOnly = false) 
 
   const isAdmin = profile ? isAdminRole(profile.role) : false;
   const isOwner = project.client_id === user.id;
+  const isAssignedStaff =
+    project.assigned_pm_id === user.id ||
+    project.assigned_designer_id === user.id ||
+    project.assigned_to === user.id;
 
   if (requireOwnerOnly) {
     if (!isOwner && !isAdmin) {
-      return { authorized: false, error: "Forbidden: Only the project owner can perform this action", user, project, supabase };
+      return {
+        authorized: false,
+        error: "Forbidden: Only the project owner or Studio Admin can perform this action",
+        user,
+        project,
+        supabase,
+        isOwner,
+        isAdmin,
+      };
     }
-  } else {
-    if (!isOwner && !isAdmin) {
-      return { authorized: false, error: "Forbidden: Access denied to project workspace", user, project, supabase };
-    }
+  } else if (!isOwner && !isAssignedStaff && !isAdmin) {
+    return {
+      authorized: false,
+      error: "Forbidden: Access denied to project workspace",
+      user,
+      project,
+      supabase,
+      isOwner,
+      isAdmin,
+    };
   }
 
-  return { authorized: true, error: null, user, project, supabase, isOwner, isAdmin };
+  return {
+    authorized: true,
+    error: null,
+    user,
+    project,
+    supabase,
+    isOwner,
+    isAdmin,
+  };
 }
 
 export async function submitBriefAction(
@@ -62,58 +106,51 @@ export async function submitBriefAction(
     }
 
     if (!formData.brandName.trim() || !formData.objective.trim()) {
-      return { ok: false, error: "Brand name and project objective are required fields." };
+      return {
+        ok: false,
+        error: "Brand name and project objective are required fields.",
+      };
     }
 
-    // Upsert project brief
-    const { error: briefErr } = await access.supabase.from("project_briefs").upsert(
+    const { data: rpcRes, error: rpcErr } = await access.supabase.rpc(
+      "submit_project_brief",
       {
-        project_id: projectId,
-        brand_name: formData.brandName.trim(),
-        objective: formData.objective.trim(),
-        audience: formData.audience.trim(),
-        platforms: formData.platforms.trim(),
-        submitted: true,
-        submitted_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "project_id" }
+        p_project_id: projectId,
+        p_brand_name: formData.brandName.trim(),
+        p_objective: formData.objective.trim(),
+        p_audience: formData.audience.trim(),
+        p_platforms: formData.platforms.trim(),
+        p_answers: {},
+      }
     );
 
-    if (briefErr) {
-      return { ok: false, error: `Failed to save creative brief: ${briefErr.message}` };
+    const parsed = rpcRes as { ok?: boolean; error?: string } | null;
+    if (rpcErr || !parsed?.ok) {
+      return {
+        ok: false,
+        error:
+          rpcErr?.message ||
+          parsed?.error ||
+          "Failed to submit creative brief to database.",
+      };
     }
 
-    // Advance project status to brief_submitted
-    const { error: updateErr } = await access.supabase
-      .from("projects")
-      .update({
-        status: "brief_submitted",
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", projectId);
-
-    if (updateErr) {
-      return { ok: false, error: `Failed to update project status: ${updateErr.message}` };
-    }
-
-    // Mark onboarding brief task as done
-    await access.supabase
-      .from("project_tasks")
-      .update({ status: "done" })
-      .eq("project_id", projectId)
-      .ilike("title", "%brief%");
-
-    await access.supabase.from("audit_logs").insert({
-      event_type: "BRIEF_SUBMITTED",
-      details: `Client submitted creative onboarding brief for project ${projectId}`,
+    await access.supabase.from("project_events").insert({
+      project_id: projectId,
+      actor_kind: "client",
       actor_id: access.user.id,
+      event_type: "BRIEF_SUBMITTED",
+      state_before: access.project.status,
+      state_after: "brief_submitted",
+      visibility: "client",
+      summary: `Client submitted onboarding creative brief for "${formData.brandName.trim()}".`,
     });
 
     revalidatePath(`/dashboard/projects/${projectId}`);
     return { ok: true };
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Failed to submit brief";
+    const message =
+      err instanceof Error ? err.message : "Failed to submit brief";
     return { ok: false, error: message };
   }
 }
@@ -129,31 +166,43 @@ export async function addPinAnnotationAction(
 ) {
   try {
     const access = await verifyProjectAccess(projectId, false);
-    if (!access.authorized || !access.user) {
+    if (!access.authorized || !access.user || !access.project) {
       return { ok: false, error: access.error || "Forbidden" };
+    }
+
+    if (!assetId || assetId === "asset-master") {
+      return {
+        ok: false,
+        error: "Pins can only be attached to an uploaded studio proof asset.",
+      };
     }
 
     if (!data.feedbackText.trim()) {
       return { ok: false, error: "Annotation feedback text cannot be empty." };
     }
 
-    // Verify asset belongs to project
     const { data: asset, error: assetErr } = await access.supabase
       .from("project_assets")
-      .select("id, project_id")
+      .select("id, project_id, version_label")
       .eq("id", assetId)
       .single();
 
     if (assetErr || !asset || asset.project_id !== projectId) {
-      return { ok: false, error: "Target creative asset does not exist on this project." };
+      return {
+        ok: false,
+        error: "Target creative asset does not exist on this project.",
+      };
     }
+
+    const x = Math.min(100, Math.max(0, Math.round(data.coordX)));
+    const y = Math.min(100, Math.max(0, Math.round(data.coordY)));
 
     const { data: annotation, error } = await access.supabase
       .from("asset_annotations")
       .insert({
         asset_id: assetId,
-        coord_x_percent: Math.min(100, Math.max(0, Math.round(data.coordX))),
-        coord_y_percent: Math.min(100, Math.max(0, Math.round(data.coordY))),
+        coord_x_percent: x,
+        coord_y_percent: y,
         feedback_text: data.feedbackText.trim(),
         created_by: access.user.id,
       })
@@ -161,13 +210,27 @@ export async function addPinAnnotationAction(
       .single();
 
     if (error || !annotation) {
-      return { ok: false, error: error?.message || "Failed to save annotation to database." };
+      return {
+        ok: false,
+        error: error?.message || "Failed to save annotation to database.",
+      };
     }
+
+    await access.supabase.from("project_events").insert({
+      project_id: projectId,
+      actor_kind: access.isAdmin ? "human_expert" : "client",
+      actor_id: access.user.id,
+      event_type: "PIN_ANNOTATION_ADDED",
+      artifact_id: assetId,
+      visibility: "client",
+      summary: `Pinned proofing feedback on ${asset.version_label} at (${x}%, ${y}%).`,
+    });
 
     revalidatePath(`/dashboard/projects/${projectId}`);
     return { ok: true, annotation };
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Failed to record feedback pin";
+    const message =
+      err instanceof Error ? err.message : "Failed to record feedback pin";
     return { ok: false, error: message };
   }
 }
@@ -187,7 +250,7 @@ export async function requestRevisionAction(
     }
 
     const used = access.project.revisions_used ?? 0;
-    const max = access.project.max_revisions ?? 3;
+    const max = access.project.max_revisions ?? 2;
 
     if (used >= max) {
       return {
@@ -208,38 +271,43 @@ export async function requestRevisionAction(
       .eq("id", projectId);
 
     if (prjUpdateErr) {
-      return { ok: false, error: `Failed to update revision counter: ${prjUpdateErr.message}` };
+      return {
+        ok: false,
+        error: `Failed to update revision counter: ${prjUpdateErr.message}`,
+      };
     }
 
-    // Insert revision task
-    const { error: taskErr } = await access.supabase.from("project_tasks").insert({
+    await access.supabase.from("project_tasks").insert({
       project_id: projectId,
-      title: `Revision Round #${newUsed}: ${instructions.slice(0, 50)}...`,
-      description: instructions,
+      title: `Revision Round #${newUsed}: ${instructions.slice(0, 50)}`,
+      description: instructions.trim(),
       status: "todo",
       display_order: 10 + newUsed,
     });
 
-    if (taskErr) {
-      console.warn("Task creation notice:", taskErr.message);
-    }
-
-    await access.supabase.from("audit_logs").insert({
-      event_type: "REVISION_REQUESTED",
-      details: `Client lodged revision round ${newUsed}/${max} for project ${projectId}`,
+    await access.supabase.from("project_events").insert({
+      project_id: projectId,
+      actor_kind: "client",
       actor_id: access.user.id,
+      event_type: "REVISION_REQUESTED",
+      state_before: access.project.status,
+      state_after: "revision_requested",
+      visibility: "client",
+      summary: `Client requested Revision Round #${newUsed}/${max}: ${instructions.trim().slice(0, 140)}`,
     });
 
     revalidatePath(`/dashboard/projects/${projectId}`);
     return { ok: true, revisionsUsed: newUsed, maxRevisions: max };
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Failed to request revision";
+    const message =
+      err instanceof Error ? err.message : "Failed to request revision";
     return { ok: false, error: message };
   }
 }
 
 export async function approveProjectAction(
   projectId: string,
+  assetId?: string,
   notes?: string
 ) {
   try {
@@ -248,40 +316,64 @@ export async function approveProjectAction(
       return { ok: false, error: access.error || "Forbidden" };
     }
 
-    // Update project status to client_approved
-    const { error: prjErr } = await access.supabase
-      .from("projects")
-      .update({
-        status: "client_approved",
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", projectId);
-
-    if (prjErr) {
-      return { ok: false, error: `Failed to register project approval: ${prjErr.message}` };
+    let targetAssetId = assetId;
+    if (!targetAssetId) {
+      const { data: latestAsset } = await access.supabase
+        .from("project_assets")
+        .select("id")
+        .eq("project_id", projectId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      targetAssetId = latestAsset?.id;
     }
 
-    const { error: appErr } = await access.supabase.from("approvals").insert({
+    if (!targetAssetId) {
+      return {
+        ok: false,
+        error:
+          "No studio proof deliverable asset has been uploaded yet. Final sign-off unlocks once the studio uploads Proof v1.",
+      };
+    }
+
+    const { data: rpcRes, error: rpcErr } = await access.supabase.rpc(
+      "approve_project_asset",
+      {
+        p_project_id: projectId,
+        p_asset_id: targetAssetId,
+        p_terms_accepted: true,
+        p_notes: notes || "Approved via Client Portal Creative Review Canvas",
+      }
+    );
+
+    const parsed = rpcRes as { ok?: boolean; error?: string } | null;
+    if (rpcErr || !parsed?.ok) {
+      return {
+        ok: false,
+        error:
+          rpcErr?.message ||
+          parsed?.error ||
+          "Failed to register asset approval in database.",
+      };
+    }
+
+    await access.supabase.from("project_events").insert({
       project_id: projectId,
-      approved_by: access.user.id,
-      legal_terms_accepted: true,
-      notes: notes || "Approved via Client Portal Creative Review Canvas",
-    });
-
-    if (appErr) {
-      return { ok: false, error: `Failed to insert approval record: ${appErr.message}` };
-    }
-
-    await access.supabase.from("audit_logs").insert({
-      event_type: "PROJECT_APPROVED",
-      details: `Client signed off and approved final deliverables for project ${projectId}`,
+      actor_kind: "client",
       actor_id: access.user.id,
+      event_type: "CLIENT_APPROVED",
+      state_before: access.project.status,
+      state_after: "client_approved",
+      artifact_id: targetAssetId,
+      visibility: "client",
+      summary: "Client accepted commercial terms and signed off final master deliverables.",
     });
 
     revalidatePath(`/dashboard/projects/${projectId}`);
     return { ok: true };
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Failed to approve project";
+    const message =
+      err instanceof Error ? err.message : "Failed to approve project";
     return { ok: false, error: message };
   }
 }

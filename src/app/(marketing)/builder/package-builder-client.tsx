@@ -586,9 +586,11 @@ export function PackageBuilderClient({
                         </div>
                         <div className="font-mono text-[11px] pt-1">
                           Status:{" "}
-                          {expressPreflight.eligible ? (
+                          {expressPreflight.serviceEligible &&
+                          cfg.sourceFilesReady &&
+                          cfg.singleMicroEditConfirmed ? (
                             <span className="text-emerald-400 font-bold">
-                              PREFLIGHT PASSED — Eligible for 10-Min Express Slot
+                              CLIENT PREFLIGHT READY — Awaits Studio Desk Slot Confirmation
                             </span>
                           ) : (
                             <span className="text-amber-300">
@@ -824,6 +826,17 @@ export function PackageBuilderClient({
                 </div>
               </div>
 
+              {pricing.quoteRequired && (
+                <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 space-y-1.5 text-xs">
+                  <p className="font-mono font-bold uppercase text-amber-300 text-[11px]">
+                    Formal Studio Quotation Required Before Checkout
+                  </p>
+                  <p className="text-[#F6F4EF]/80 leading-relaxed">
+                    Displayed figures are estimated reference hours ({pricing.totalScopedHours}h). Direct online payment is paused until final scope &amp; Ratebook confirmation is issued by the Studio Desk.
+                  </p>
+                </div>
+              )}
+
               <div className="pt-4 flex flex-col sm:flex-row gap-3">
                 <Button
                   type="button"
@@ -973,7 +986,9 @@ export function PackageBuilderClient({
               </div>
             )}
             <div className="flex justify-between text-base font-bold text-[#D9BD81] pt-2 border-t border-[#232528]">
-              <span>Estimated Total</span>
+              <span>
+                {pricing.quoteRequired ? "Estimated Reference" : "Approved Total"}
+              </span>
               <span>
                 {symbol}
                 {(currency === "BDT"
@@ -982,6 +997,11 @@ export function PackageBuilderClient({
                 ).toLocaleString()}
               </span>
             </div>
+            {pricing.quoteRequired && (
+              <p className="text-[10px] text-amber-300/90 pt-1">
+                Quote confirmation required before payment checkout.
+              </p>
+            )}
           </div>
         </div>
       </div>

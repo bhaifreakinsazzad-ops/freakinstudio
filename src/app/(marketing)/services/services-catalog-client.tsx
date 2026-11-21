@@ -480,7 +480,7 @@ export function ServicesCatalogClient({
               <div className="flex justify-between text-[#F6F4EF]/70">
                 <span>
                   Scoped Hours ({totalScopedHours}h &times;{" "}
-                  {currency === "BDT" ? "৳1,500" : "$15"}/h)
+                  {currency === "BDT" ? "৳1,500" : "$15"}/h ref.)
                 </span>
                 <span>
                   {currency === "BDT" ? "৳" : "$"}
@@ -497,12 +497,21 @@ export function ServicesCatalogClient({
                 </div>
               )}
               <div className="flex justify-between border-t border-[#232528] pt-2.5 text-sm font-bold text-[#D9BD81]">
-                <span>Estimated Scoped Total</span>
+                <span>
+                  {activeService.pricing_status === "approved"
+                    ? "Approved Scoped Total"
+                    : "Estimated Reference"}
+                </span>
                 <span>
                   {currency === "BDT" ? "৳" : "$"}
                   {finalEstimated.toLocaleString()}
                 </span>
               </div>
+              {activeService.pricing_status !== "approved" && (
+                <p className="text-[10px] text-amber-300/90 pt-1">
+                  Reference hours estimate — formal studio quote confirmed before payment.
+                </p>
+              )}
             </div>
 
             <Button

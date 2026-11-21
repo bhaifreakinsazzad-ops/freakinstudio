@@ -1,17 +1,29 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Lato, Noto_Sans_Bengali, JetBrains_Mono } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
+import { ServiceWorkerRegister } from "@/components/pwa/sw-register";
 import { I18nProvider } from "@/lib/i18n/context";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-sans",
+const latoSans = Lato({
+  variable: "--font-lato",
   subsets: ["latin"],
+  weight: ["400", "700", "900"],
+  display: "swap",
 });
 
-const geistMono = Geist_Mono({
+const notoBengali = Noto_Sans_Bengali({
+  variable: "--font-bengali",
+  subsets: ["bengali", "latin"],
+  weight: ["400", "600", "700"],
+  display: "swap",
+});
+
+const jetbrainsMono = JetBrains_Mono({
   variable: "--font-mono",
   subsets: ["latin"],
+  weight: ["400", "600", "700"],
+  display: "swap",
 });
 
 export const viewport: Viewport = {
@@ -77,10 +89,11 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} dark h-full antialiased`}
+      className={`${latoSans.variable} ${notoBengali.variable} ${jetbrainsMono.variable} dark h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-[#090A0A] text-[#F6F4EF] selection:bg-[#D9BD81] selection:text-[#090A0A] cyber-scrollbar">
         <I18nProvider>
+          <ServiceWorkerRegister />
           {children}
           <Toaster position="bottom-right" richColors />
         </I18nProvider>

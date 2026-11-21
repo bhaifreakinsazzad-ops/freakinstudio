@@ -1,5 +1,20 @@
+import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { createClient } from "@/lib/supabase/server";
+import { tryPrivilegedClient } from "@/lib/supabase/privileged";
+import {
+  ASSISTANT_DEFINITIONS,
+  getAiProvider,
+  sanitizePromptInput,
+} from "@/lib/ai/provider";
+import {
+  buildGuestSessionSetCookieHeader,
+  getClientIpHash,
+  getMemoryUsageToday,
+  recordMemoryUsageToday,
+  resolveGuestSession,
+} from "@/lib/ai/session";
 
 const aiRequestSchema = z.object({
   assistantId: z.enum([
@@ -15,144 +30,354 @@ const aiRequestSchema = z.object({
     .min(3, "Please enter at least 3 characters describing your product or goal.")
     .max(1200, "Prompt exceeds maximum length (1200 characters)."),
   locale: z.enum(["en", "bn"]).optional().default("en"),
-  clientKillSwitchActive: z.boolean().optional().default(false),
 });
 
-const ASSISTANT_CATALOG: Record<
-  z.infer<typeof aiRequestSchema>["assistantId"],
-  {
-    title: string;
-    recommendedServiceId: string;
-    recommendedKitSku: string;
-    estimatedCostBdt: number;
-    buildResponse: (input: string) => string[];
+async function loadGatewayPolicy() {
+  const envKillSwitch =
+    process.env.STUDIO_AI_KILL_SWITCH === "true" ||
+    process.env.STUDIO_AI_KILL_SWITCH === "1";
+  let dbKillSwitch = false;
+  let dailyBudgetCapBdt = Number(process.env.STUDIO_AI_DAILY_BUDGET_BDT || 500);
+  let guestDailyQuota = Number(process.env.STUDIO_AI_GUEST_DAILY_QUOTA || 3);
+
+  const privileged = tryPrivilegedClient();
+  if (privileged) {
+    const { data } = await privileged
+      .from("ai_gateway_config")
+      .select("kill_switch_active, daily_budget_cap_bdt, guest_daily_quota")
+      .eq("id", "default")
+      .maybeSingle();
+
+    if (data) {
+      dbKillSwitch = Boolean(data.kill_switch_active);
+      dailyBudgetCapBdt = Number(data.daily_budget_cap_bdt);
+      guestDailyQuota = Number(data.guest_daily_quota);
+    }
   }
-> = {
-  brief_assistant: {
-    title: "AI Creative Brief Assistant",
-    recommendedServiceId: "SRV-03",
-    recommendedKitSku: "SKU-BRAND-199",
-    estimatedCostBdt: 3,
-    buildResponse: (input) => [
-      `OBJECTIVE CLARITY: Position "${input}" with an unmistakable visual hierarchy anchored in high-contrast typography and disciplined negative space.`,
-      `DELIVERABLE SCOPE: Primary Vector Mark (SVG/AI) + 4:5 Hero Social Key Visual + Print-Ready Specification Sheet.`,
-      `HUMAN STUDIO ROUTING: Maps directly to SRV-03 (Brand Identity Starter System, 10h scoped, 2 consolidated revisions).`,
-      `RISK & EXCLUSION GUARD: Avoid stock templates; ensure minimum 7:1 AAA contrast on primary headline locks.`,
-    ],
-  },
-  ad_hook_generator: {
-    title: "AI Ad Hook Generator",
-    recommendedServiceId: "SRV-07",
-    recommendedKitSku: "SKU-CAMP-99",
-    estimatedCostBdt: 3,
-    buildResponse: (input) => [
-      `HOOK ANGLE 01 [Pattern Interrupt]: "Stop scrolling past generic ${input} — see how precision craft changes the first 2 seconds."`,
-      `HOOK ANGLE 02 [Proof & Authority]: "Built for founders who measure quality in retention, not templates: ${input}."`,
-      `HOOK ANGLE 03 [Direct Value CTA]: "Upgrade your ${input} creative today. 2 consolidated revisions, print & social ready."`,
-      `STUDIO UPGRADE PATH: Commission SRV-07 (Paid Ad Creative Variations, 5h scoped) for 3 human-art-directed 4:5 & 9:16 ad sets.`,
-    ],
-  },
-  caption_generator: {
-    title: "AI Caption Generator (EN + BN)",
-    recommendedServiceId: "SRV-05",
-    recommendedKitSku: "SKU-SHOP-49",
-    estimatedCostBdt: 2,
-    buildResponse: (input) => [
-      `ENGLISH CAPTION: "Precision isn't an accident. Introducing our latest direction for ${input} — crafted with Obsidian depth and Champagne Gold clarity. Tap the link or message +8801778307704 to reserve your slot."`,
-      `BANGLA CAPTION: "${input}-এর জন্য আমাদের নতুন প্রিমিয়াম ক্রিয়েটিভ দিকনির্দেশনা। নিখুঁত ডিজাইন এবং দ্রুত ডেলিভারির জন্য আজই যোগাযোগ করুন: +8801778307704।"`,
-      `CTA & FORMAT PAIRING: Pair with a 1080×1350 (4:5) Portrait Feed visual (SRV-05) for maximum mobile screen occupancy.`,
-    ],
-  },
-  product_description: {
-    title: "Product Description Assistant",
-    recommendedServiceId: "SRV-10",
-    recommendedKitSku: "SKU-SHOP-49",
-    estimatedCostBdt: 2,
-    buildResponse: (input) => [
-      `HERO POSITIONING: "${input}" — engineered for discerning customers who demand tactile quality and zero compromises.`,
-      `KEY BENEFIT BULLETS: • High-contrast shelf presence • Verified material & finish specifications • Built for immediate D2C & retail trust.`,
-      `PACKAGING CALLOUT: Pair this copy with SRV-10 (Packaging & Label Design, 7h scoped) for print-ready CMYK dielines and 3D presentation mockups.`,
-    ],
-  },
-  brand_concept: {
-    title: "Brand Concept Generator",
-    recommendedServiceId: "SRV-01",
-    recommendedKitSku: "SKU-BRAND-199",
-    estimatedCostBdt: 4,
-    buildResponse: (input) => [
-      `CONCEPT ARCHETYPE: "The Modern Atelier" — authoritative, geometric, and tactile direction tailored for ${input}.`,
-      `COLOR & TYPE DIRECTION: Primary Background #090A0A (Obsidian), Accent #D9BD81 (Champagne Gold), Surface Text #F6F4EF (Studio Ivory) with Syne Display + Plus Jakarta Sans.`,
-      `MONOGRAM GEOMETRY: 45-degree chamfered frame with precision corner ticks — commission SRV-01 (Logo Design & Mark Creation, 6h) for human vector execution.`,
-    ],
-  },
-};
+
+  return {
+    killSwitchActive: envKillSwitch || dbKillSwitch,
+    dailyBudgetCapBdt: Number.isFinite(dailyBudgetCapBdt) ? dailyBudgetCapBdt : 500,
+    guestDailyQuota: Number.isFinite(guestDailyQuota) ? guestDailyQuota : 3,
+    privileged,
+  };
+}
+
+async function logUsageEvent(params: {
+  privileged: ReturnType<typeof tryPrivilegedClient>;
+  requestId: string;
+  sessionId: string;
+  userId: string | null;
+  assistantId: string;
+  provider: "puter_sponsored" | "demo_template" | "blocked";
+  model: string;
+  status:
+    | "completed"
+    | "quota_blocked"
+    | "budget_blocked"
+    | "kill_switch_blocked"
+    | "failed";
+  inputChars: number;
+  outputChars: number;
+  estimatedCostBdt: number;
+  latencyMs: number;
+  ipHash: string;
+}) {
+  if (!params.privileged) return;
+  try {
+    await params.privileged.from("ai_usage_events").insert({
+      request_id: params.requestId,
+      session_id: params.sessionId,
+      user_id: params.userId,
+      assistant_id: params.assistantId,
+      provider: params.provider,
+      model: params.model,
+      status: params.status,
+      input_chars: params.inputChars,
+      output_chars: params.outputChars,
+      estimated_cost_bdt: params.estimatedCostBdt,
+      latency_ms: params.latencyMs,
+      ip_hash: params.ipHash,
+    });
+  } catch {
+    // Non-fatal telemetry failure must not crash request handling
+  }
+}
 
 export async function POST(request: Request) {
-  try {
-    // 1. Server-level Emergency Kill Switch check
-    if (
-      process.env.STUDIO_AI_KILL_SWITCH === "true" ||
-      process.env.STUDIO_AI_KILL_SWITCH === "1"
-    ) {
-      return NextResponse.json(
-        {
-          ok: false,
-          code: "AI_KILL_SWITCH_ACTIVE",
-          error:
-            "Studio AI Gateway is temporarily paused by Studio Pulse Administration. All 6 browser-native Free Tools and 13 Human Services remain 100% operational.",
-        },
-        { status: 503 }
+  const startedAt = Date.now();
+  const requestId = `ai-${randomUUID()}`;
+  const guest = resolveGuestSession(request);
+  const ipHash = getClientIpHash(request);
+
+  const attachCookie = (res: NextResponse) => {
+    if (guest.isNew) {
+      res.headers.append(
+        "Set-Cookie",
+        buildGuestSessionSetCookieHeader(guest.signedCookieValue)
       );
+    }
+    return res;
+  };
+
+  try {
+    let userId: string | null = null;
+    if (
+      process.env.NEXT_PUBLIC_SUPABASE_URL &&
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    ) {
+      try {
+        const supabase = await createClient();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        userId = user?.id ?? null;
+      } catch {
+        userId = null;
+      }
     }
 
     const body = await request.json();
     const parsed = aiRequestSchema.safeParse(body);
-
     if (!parsed.success) {
       const firstIssue =
         parsed.error.issues[0]?.message || "Invalid AI assistant payload.";
-      return NextResponse.json(
-        { ok: false, error: firstIssue },
-        { status: 400 }
+      return attachCookie(
+        NextResponse.json({ ok: false, error: firstIssue }, { status: 400 })
       );
     }
 
-    if (parsed.data.clientKillSwitchActive) {
-      return NextResponse.json(
-        {
-          ok: false,
-          code: "AI_KILL_SWITCH_ACTIVE",
-          error:
-            "Studio AI Gateway is paused via Studio Pulse Kill Switch. Switch directly to Free Tools or submit a Smart Brief.",
-        },
-        { status: 503 }
+    const assistant = ASSISTANT_DEFINITIONS[parsed.data.assistantId];
+    const cleanPrompt = sanitizePromptInput(parsed.data.prompt);
+    const policy = await loadGatewayPolicy();
+
+    // 1. Server-authoritative Emergency Kill Switch (ignores any client body flag)
+    if (policy.killSwitchActive) {
+      await logUsageEvent({
+        privileged: policy.privileged,
+        requestId,
+        sessionId: guest.sessionId,
+        userId,
+        assistantId: assistant.id,
+        provider: "blocked",
+        model: "none",
+        status: "kill_switch_blocked",
+        inputChars: cleanPrompt.length,
+        outputChars: 0,
+        estimatedCostBdt: 0,
+        latencyMs: Date.now() - startedAt,
+        ipHash,
+      });
+
+      return attachCookie(
+        NextResponse.json(
+          {
+            ok: false,
+            code: "AI_KILL_SWITCH_ACTIVE",
+            error:
+              "Studio AI Gateway is paused by Studio Pulse Administration. All 6 browser-native Free Tools and 13 Human Services remain active.",
+          },
+          { status: 503 }
+        )
       );
     }
 
-    const assistant = ASSISTANT_CATALOG[parsed.data.assistantId];
-    const lines = assistant.buildResponse(parsed.data.prompt);
+    // 2. Enforce Daily Guest Trial Quota & Studio Daily Budget Cap
+    let sessionUsedCount = 0;
+    let studioDailySpendBdt = 0;
 
-    return NextResponse.json({
-      ok: true,
-      gatewayMode: process.env.PUTER_SERVER_TOKEN
-        ? "PUTER_SPONSORED_SERVER_GATEWAY"
-        : "DEMO_AI_ADAPTER_NO_PUTER_LOGIN",
-      assistantId: parsed.data.assistantId,
-      assistantTitle: assistant.title,
-      recommendedServiceId: assistant.recommendedServiceId,
-      recommendedKitSku: assistant.recommendedKitSku,
-      estimatedCostBdt: assistant.estimatedCostBdt,
-      puterLoginRequired: false,
-      lines,
-      generatedAt: new Date().toISOString(),
+    if (policy.privileged) {
+      const todayIso = new Date();
+      todayIso.setUTCHours(0, 0, 0, 0);
+
+      const [{ count: guestCount }, { data: spendRows }] = await Promise.all([
+        policy.privileged
+          .from("ai_usage_events")
+          .select("id", { count: "exact", head: true })
+          .eq("session_id", guest.sessionId)
+          .eq("status", "completed")
+          .gte("created_at", todayIso.toISOString()),
+        policy.privileged
+          .from("ai_usage_events")
+          .select("estimated_cost_bdt")
+          .eq("status", "completed")
+          .gte("created_at", todayIso.toISOString()),
+      ]);
+
+      sessionUsedCount = guestCount ?? 0;
+      studioDailySpendBdt = (spendRows || []).reduce(
+        (sum, r) => sum + Number(r.estimated_cost_bdt || 0),
+        0
+      );
+    } else {
+      const mem = getMemoryUsageToday(guest.sessionId);
+      sessionUsedCount = mem.count;
+      studioDailySpendBdt = mem.globalSpendBdt;
+    }
+
+    if (sessionUsedCount >= policy.guestDailyQuota) {
+      await logUsageEvent({
+        privileged: policy.privileged,
+        requestId,
+        sessionId: guest.sessionId,
+        userId,
+        assistantId: assistant.id,
+        provider: "blocked",
+        model: "none",
+        status: "quota_blocked",
+        inputChars: cleanPrompt.length,
+        outputChars: 0,
+        estimatedCostBdt: 0,
+        latencyMs: Date.now() - startedAt,
+        ipHash,
+      });
+
+      return attachCookie(
+        NextResponse.json(
+          {
+            ok: false,
+            code: "GUEST_DAILY_QUOTA_REACHED",
+            quota: {
+              used: sessionUsedCount,
+              limit: policy.guestDailyQuota,
+              remaining: 0,
+            },
+            error: `Daily sponsored AI trial quota (${policy.guestDailyQuota}/${policy.guestDailyQuota}) reached for this session. Continue using our 6 unlimited Free Tools or submit a Smart Brief.`,
+          },
+          { status: 429 }
+        )
+      );
+    }
+
+    if (
+      studioDailySpendBdt + assistant.estimatedCostBdt >
+      policy.dailyBudgetCapBdt
+    ) {
+      await logUsageEvent({
+        privileged: policy.privileged,
+        requestId,
+        sessionId: guest.sessionId,
+        userId,
+        assistantId: assistant.id,
+        provider: "blocked",
+        model: "none",
+        status: "budget_blocked",
+        inputChars: cleanPrompt.length,
+        outputChars: 0,
+        estimatedCostBdt: 0,
+        latencyMs: Date.now() - startedAt,
+        ipHash,
+      });
+
+      return attachCookie(
+        NextResponse.json(
+          {
+            ok: false,
+            code: "STUDIO_DAILY_BUDGET_CAP_REACHED",
+            error:
+              "Studio daily AI sponsorship budget has been reached for today. Browser-native Free Tools remain unlimited.",
+          },
+          { status: 503 }
+        )
+      );
+    }
+
+    // 3. Execute AI Provider (Real Puter Sponsored vs explicit Demo Template Fallback)
+    const { provider } = getAiProvider();
+    let result;
+    try {
+      result = await provider.generate({
+        assistant,
+        userPrompt: cleanPrompt,
+        locale: parsed.data.locale,
+      });
+    } catch (providerErr: unknown) {
+      await logUsageEvent({
+        privileged: policy.privileged,
+        requestId,
+        sessionId: guest.sessionId,
+        userId,
+        assistantId: assistant.id,
+        provider: "puter_sponsored",
+        model: process.env.PUTER_AI_MODEL || "gpt-4o-mini",
+        status: "failed",
+        inputChars: cleanPrompt.length,
+        outputChars: 0,
+        estimatedCostBdt: 0,
+        latencyMs: Date.now() - startedAt,
+        ipHash,
+      });
+
+      const msg =
+        providerErr instanceof Error
+          ? providerErr.message
+          : "Upstream AI provider request failed.";
+      return attachCookie(
+        NextResponse.json(
+          {
+            ok: false,
+            isRealAi: false,
+            code: "AI_PROVIDER_UPSTREAM_ERROR",
+            error: `Sponsored Puter AI request failed: ${msg}`,
+          },
+          { status: 502 }
+        )
+      );
+    }
+
+    const billedCostBdt = result.isRealAi ? assistant.estimatedCostBdt : 0;
+    const outputChars = result.lines.join("\n").length;
+
+    if (!policy.privileged) {
+      recordMemoryUsageToday(guest.sessionId, billedCostBdt);
+    }
+
+    await logUsageEvent({
+      privileged: policy.privileged,
+      requestId,
+      sessionId: guest.sessionId,
+      userId,
+      assistantId: assistant.id,
+      provider: result.provider,
+      model: result.model,
+      status: "completed",
+      inputChars: cleanPrompt.length,
+      outputChars,
+      estimatedCostBdt: billedCostBdt,
+      latencyMs: Date.now() - startedAt,
+      ipHash,
     });
+
+    const newUsed = sessionUsedCount + 1;
+
+    return attachCookie(
+      NextResponse.json({
+        ok: true,
+        isRealAi: result.isRealAi,
+        gatewayMode: result.gatewayMode,
+        model: result.model,
+        disclaimer: result.disclaimer,
+        assistantId: assistant.id,
+        assistantTitle: assistant.title,
+        recommendedServiceId: assistant.recommendedServiceId,
+        recommendedKitSku: assistant.recommendedKitSku,
+        estimatedCostBdt: billedCostBdt,
+        puterLoginRequired: false,
+        quota: {
+          used: newUsed,
+          limit: policy.guestDailyQuota,
+          remaining: Math.max(0, policy.guestDailyQuota - newUsed),
+        },
+        lines: result.lines,
+        generatedAt: new Date().toISOString(),
+      })
+    );
   } catch {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: "Unable to process Studio AI request.",
-      },
-      { status: 400 }
+    return attachCookie(
+      NextResponse.json(
+        { ok: false, error: "Unable to process Studio AI request." },
+        { status: 400 }
+      )
     );
   }
 }

@@ -37,50 +37,75 @@ describe("Directive 9.0 Section 11 — Complete Multi-User Lifecycle Integration
 
   it("executes the complete 28-step commercial lifecycle from catalog selection to verified delivery", async () => {
     // -------------------------------------------------------------
-    // STEP 1-3: Catalog Exploration & Service Selection (A02 + C02)
+    // STEP 1-3: Catalog Exploration & Canonical + Legacy Mapping (SRV-02 + SRV-06)
     // -------------------------------------------------------------
     const serviceA02 = await getServiceById("A02");
     const serviceC02 = await getServiceById("C02");
+    const canonicalSrv02 = await getServiceById("SRV-02");
+    const canonicalSrv06 = await getServiceById("SRV-06");
 
     expect(serviceA02).not.toBeNull();
     expect(serviceC02).not.toBeNull();
     expect(serviceA02?.id).toBe("A02");
     expect(serviceC02?.id).toBe("C02");
+    expect(serviceA02?.pricing_status).toBe("quote_required");
+    expect(canonicalSrv02?.id).toBe("SRV-02");
+    expect(canonicalSrv06?.id).toBe("SRV-06");
 
     // -------------------------------------------------------------
     // STEP 4-5: Service Configuration & Add-ons Selection
     // -------------------------------------------------------------
-    const addOnsForA02 = await getAddOnsForService("A02");
-    const addOnsForC02 = await getAddOnsForService("C02");
+    const addOnsForSrv02 = await getAddOnsForService("SRV-02");
+    const addOnsForSrv06 = await getAddOnsForService("SRV-06");
 
-    expect(addOnsForA02.length).toBeGreaterThan(0);
-    expect(addOnsForC02.length).toBeGreaterThan(0);
+    expect(addOnsForSrv02.length).toBeGreaterThan(0);
+    expect(addOnsForSrv06.length).toBeGreaterThan(0);
 
-    const selectedAddOnA02 = addOnsForA02[0].id;
-    const selectedAddOnC02 = addOnsForC02[0].id;
+    const selectedAddOnSrv02 = addOnsForSrv02[0].id;
+    const selectedAddOnSrv06 = addOnsForSrv06[0].id;
 
     const configs: Record<string, ServiceConfig> = {
-      A02: { quantity: 2, rush: false, format: "Promotional Banner (16:9)" },
-      C02: { quantity: 1, rush: true, format: "Vertical 9:16 (Reels/TikTok)" },
+      "SRV-02": { quantity: 2, rush: false, format: "Promotional Banner (16:9)" },
+      "SRV-06": { quantity: 1, rush: true, format: "Vertical 9:16 (Reels/TikTok)" },
     };
 
     const selectedAddOns: Record<string, string[]> = {
-      A02: [selectedAddOnA02],
-      C02: [selectedAddOnC02],
+      "SRV-02": [selectedAddOnSrv02],
+      "SRV-06": [selectedAddOnSrv06],
     };
 
-    // Calculate server-authoritative pricing
-    const pricingSummary = calculatePricingSummary({
-      serviceIds: ["A02", "C02"],
+    // Unapproved Ratebook v8/v8.1 defaults must gate direct checkout behind quoteRequired = true
+    const unapprovedQuoteCheck = calculatePricingSummary({
+      serviceIds: ["SRV-02", "SRV-06"],
       serviceConfigs: configs,
       selectedAddOns,
       currency: "BDT",
-      catalogServices: [serviceA02!, serviceC02!],
-      catalogAddOns: [addOnsForA02[0], addOnsForC02[0]],
+      catalogServices: [canonicalSrv02!, canonicalSrv06!],
+      catalogAddOns: [addOnsForSrv02[0], addOnsForSrv06[0]],
+    });
+    expect(unapprovedQuoteCheck.quoteRequired).toBe(true);
+    expect(unapprovedQuoteCheck.quoteReasons.length).toBeGreaterThan(0);
+
+    // Approved catalog fixture (or Studio-issued quote) unlocks priced checkout
+    const approvedCatalogServices = [canonicalSrv02!, canonicalSrv06!].map((s) => ({
+      ...s,
+      pricing_status: "approved" as const,
+      ratebook_approved: true,
+    }));
+
+    const pricingSummary = calculatePricingSummary({
+      serviceIds: ["SRV-02", "SRV-06"],
+      serviceConfigs: configs,
+      selectedAddOns,
+      currency: "BDT",
+      catalogServices: approvedCatalogServices,
+      catalogAddOns: [addOnsForSrv02[0], addOnsForSrv06[0]],
+      evaluationDate: "2026-12-20",
     });
 
     expect(pricingSummary.subtotalBDT).toBeGreaterThan(0);
     expect(pricingSummary.finalBDT).toBeGreaterThan(0);
+    expect(pricingSummary.rushSurchargeBDT).toBe(0);
     expect(pricingSummary.quoteRequired).toBe(false);
 
     // -------------------------------------------------------------
@@ -96,7 +121,7 @@ describe("Directive 9.0 Section 11 — Complete Multi-User Lifecycle Integration
         market: "BD",
         industry: "E-commerce & Retail",
       },
-      services: ["A02", "C02"],
+      services: ["SRV-02", "SRV-06"],
       serviceConfigs: configs,
       selectedAddOns,
       pricing: pricingSummary,
@@ -106,8 +131,8 @@ describe("Directive 9.0 Section 11 — Complete Multi-User Lifecycle Integration
     const serializedDraft = JSON.stringify(packageDraft);
     const restoredDraft: PackageDraft = JSON.parse(serializedDraft);
     expect(restoredDraft.id).toBe(draftId);
-    expect(restoredDraft.services).toEqual(["A02", "C02"]);
-    expect(restoredDraft.serviceConfigs.A02.quantity).toBe(2);
+    expect(restoredDraft.services).toEqual(["SRV-02", "SRV-06"]);
+    expect(restoredDraft.serviceConfigs["SRV-02"].quantity).toBe(2);
 
     // -------------------------------------------------------------
     // STEP 10-13: Quotation Request & Studio Admin Review

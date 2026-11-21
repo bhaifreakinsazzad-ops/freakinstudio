@@ -159,7 +159,9 @@ export default async function ServiceDetailPage({
             <div className="rounded-2xl border border-[#D9BD81]/40 bg-[#121315] p-6 space-y-6">
               <div className="space-y-1">
                 <span className="text-[10px] font-mono uppercase text-[#D9BD81]">
-                  Canonical Hourly Scoped Rate ({service.estimated_hours || 4}h)
+                  {service.pricing_status === "approved"
+                    ? `Approved Hourly Scoped Rate (${service.estimated_hours || 4}h)`
+                    : `Estimated Reference Baseline (${service.estimated_hours || 4}h • Quote Confirmed)`}
                 </span>
                 <div className="flex items-baseline gap-3">
                   <span className="text-3xl font-bold font-mono text-[#F6F4EF]">
@@ -169,6 +171,11 @@ export default async function ServiceDetailPage({
                     / ${service.base_usd.toLocaleString()} USD
                   </span>
                 </div>
+                {service.pricing_status !== "approved" && (
+                  <p className="text-[11px] font-mono text-amber-300 pt-1">
+                    Ratebook Confirmation Pending — Formal Studio Quote Issued Prior to Payment
+                  </p>
+                )}
                 <p className="text-[11px] font-mono text-emerald-400 pt-1">
                   5% Launch Window Promo Eligible (20 Nov &ndash; 15 Dec 2026)
                 </p>

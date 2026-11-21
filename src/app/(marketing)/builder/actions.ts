@@ -168,7 +168,6 @@ export async function requestQuoteAction(draft: PackageDraft) {
       };
     }
 
-    // Server-authoritative price recalculation per Directive 10.0 Section 5
     const currency = draft.pricing?.currency || "BDT";
     const [catalogServices, catalogAddOns] = await Promise.all([
       getCatalogServices(),
@@ -181,6 +180,7 @@ export async function requestQuoteAction(draft: PackageDraft) {
       currency,
       catalogServices,
       catalogAddOns,
+      evaluationDate: new Date(),
       policy: APPROVED_ENTERPRISE_POLICY,
     });
 
@@ -188,16 +188,17 @@ export async function requestQuoteAction(draft: PackageDraft) {
       const srv = catalogServices.find((s) => s.id === sid);
       const cfg = draft.serviceConfigs[sid] || { quantity: 1 };
       const qty = cfg.quantity || 1;
+      const addOnIds = draft.selectedAddOns[sid] || [];
       return {
         service_id: sid,
         title: srv?.title || `Service ${sid}`,
         quantity: qty,
         config: cfg,
+        addOnIds,
       };
     });
 
-    // Execute trusted quotation RPC (Migration 10)
-    // CRITICAL SECURITY FIX (Directive 13.0 §4): Fail closed on RPC unavailability.
+    // Execute trusted quotation RPC (Migration 014)
     const { data: rpcRes, error: rpcErr } = await supabase.rpc(
       "create_quotation_request",
       {
@@ -215,17 +216,23 @@ export async function requestQuoteAction(draft: PackageDraft) {
       }
     );
 
-    if (rpcErr || !rpcRes || !(rpcRes as Record<string, unknown>).ok) {
-      console.error("Trusted create_quotation_request RPC failed:", rpcErr?.message);
+    const parsed = rpcRes as {
+      ok?: boolean;
+      quote_id?: string;
+      quote_ref?: string;
+      error?: string;
+    } | null;
+
+    if (rpcErr || !parsed?.ok || !parsed.quote_id || !parsed.quote_ref) {
+      console.error("Trusted create_quotation_request RPC failed:", rpcErr?.message || parsed?.error);
       return {
         ok: false,
         error: `Database quotation service unavailable: ${
-          rpcErr?.message || "Trusted transaction procedure not ready."
+          rpcErr?.message || parsed?.error || "Trusted transaction procedure not ready."
         }. Your package draft has been preserved.`,
       };
     }
 
-    const parsed = rpcRes as { ok: boolean; quote_id: string; quote_ref: string };
     return { ok: true, quoteRef: parsed.quote_ref, quoteId: parsed.quote_id };
   } catch (err: unknown) {
     const message =
@@ -254,7 +261,6 @@ export async function createOrderFromBuilderAction(
       };
     }
 
-    // Server-authoritative price recalculation per Directive 10.0 Defect A & Section 3
     const currency = draft.pricing?.currency || "BDT";
     const [catalogServices, catalogAddOns] = await Promise.all([
       getCatalogServices(),
@@ -267,10 +273,10 @@ export async function createOrderFromBuilderAction(
       currency,
       catalogServices,
       catalogAddOns,
+      evaluationDate: new Date(),
       policy: APPROVED_ENTERPRISE_POLICY,
     });
 
-    // Gating check: Block direct checkout if quotation is required
     if (calculatedPricing.quoteRequired) {
       return {
         ok: false,
@@ -280,7 +286,6 @@ export async function createOrderFromBuilderAction(
       };
     }
 
-    // Gate development sandbox adapter in production
     if (gateway === "sandbox" && process.env.NODE_ENV === "production") {
       return {
         ok: false,
@@ -309,18 +314,18 @@ export async function createOrderFromBuilderAction(
       const srv = catalogServices.find((s) => s.id === sid);
       const cfg = draft.serviceConfigs[sid] || { quantity: 1 };
       const qty = cfg.quantity || 1;
+      const addOnIds = draft.selectedAddOns[sid] || [];
       return {
         service_id: sid,
         title: srv?.title || `Service ${sid}`,
         quantity: qty,
         config: cfg,
+        addOnIds,
       };
     });
 
     const isTestOrder = resolvedGateway === "dev_test_adapter";
 
-    // Execute trusted order creation RPC (Migration 10)
-    // CRITICAL SECURITY FIX (Directive 13.0 §4): Fail closed on RPC unavailability.
     const { data: rpcOrderRes, error: rpcOrderErr } = await supabase.rpc(
       "create_pending_order",
       {
@@ -337,22 +342,27 @@ export async function createOrderFromBuilderAction(
         } as unknown as Json,
         p_items: orderItemsPayload as unknown as Json,
         p_is_test: isTestOrder,
+        p_gateway: resolvedGateway,
       }
     );
 
-    if (rpcOrderErr || !rpcOrderRes || !(rpcOrderRes as Record<string, unknown>).ok) {
-      console.error("Trusted create_pending_order RPC failed:", rpcOrderErr?.message);
+    const parsedOrder = rpcOrderRes as {
+      ok?: boolean;
+      order_id?: string;
+      error?: string;
+    } | null;
+
+    if (rpcOrderErr || !parsedOrder?.ok || !parsedOrder.order_id) {
+      console.error("Trusted create_pending_order RPC failed:", rpcOrderErr?.message || parsedOrder?.error);
       return {
         ok: false,
         error: `Database order transaction service unavailable: ${
-          rpcOrderErr?.message || "Trusted procedure not ready."
+          rpcOrderErr?.message || parsedOrder?.error || "Trusted procedure not ready."
         }. Checkout blocked to preserve commercial integrity.`,
       };
     }
 
-    const orderId = (rpcOrderRes as { order_id: string }).order_id;
-
-    // Determine callback slug
+    const orderId = parsedOrder.order_id;
     const callbackSlug =
       resolvedGateway === "stripe"
         ? "stripe"
@@ -360,11 +370,10 @@ export async function createOrderFromBuilderAction(
         ? "sslcommerz"
         : "dev-test";
 
-    // Initiate payment session with payment adapter
     const paymentInit = await initiatePayment(
       {
-        orderId: orderId,
-        orderRef: orderRef,
+        orderId,
+        orderRef,
         amount: finalAmount,
         currency: calculatedPricing.currency,
         customerName:
@@ -391,8 +400,8 @@ export async function createOrderFromBuilderAction(
 
     return {
       ok: true,
-      orderRef: orderRef,
-      orderId: orderId,
+      orderRef,
+      orderId,
       txId: paymentInit.transactionRef,
       redirectUrl: paymentInit.redirectUrl,
     };
@@ -435,6 +444,7 @@ export async function submitPackageAction(input: {
     currency: input.currency,
     catalogServices,
     catalogAddOns,
+    evaluationDate: new Date(),
     policy: APPROVED_ENTERPRISE_POLICY,
   });
 
@@ -475,4 +485,5 @@ export async function submitPackageAction(input: {
     redirectUrl: orderRes.redirectUrl,
   };
 }
+
 

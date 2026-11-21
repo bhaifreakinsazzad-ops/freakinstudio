@@ -23,18 +23,23 @@ import {
  *    Monetary Subtotal = Scoped Hours × Approved Hourly Rate (or explicit service base rate)
  * 2. Launch Promotion Window (5% Discount):
  *    Valid strictly from 20 Nov 2026 00:00:00 to 15 Dec 2026 23:59:59 (Asia/Dhaka, UTC+06:00).
- *    Applied once to the aggregate eligible subtotal.
+ *    Defaults to current server clock when evaluationDate is omitted.
  * 3. Unapproved +35% Rush Surcharge Retired:
  *    Default rushSurchargeRate is 0. Express 10-minute delivery is strictly preflight-gated for
- *    eligible single-file micro-edits (SRV-02, SRV-05, SRV-13) with ready source files.
+ *    eligible single-file micro-edits (SRV-02, SRV-05, SRV-13) with ready source files AND
+ *    explicit studio desk slot confirmation (`studioSlotConfirmed === true`).
+ * 4. Pending Ratebook v8/v8.1 Gating:
+ *    Services or bundles with `pricing_status === "quote_required"` set `quoteRequired = true`
+ *    and block direct self-serve checkout until studio quotation or Ratebook v8/v8.1 approval.
  */
 
 export const LAUNCH_PROMO_START_DHAKA = "2026-11-20T00:00:00+06:00";
 export const LAUNCH_PROMO_END_DHAKA = "2026-12-15T23:59:59+06:00";
 export const LAUNCH_PROMO_RATE = 0.05;
 
-export function isLaunchPromoActive(referenceDate?: string | Date): boolean {
-  if (!referenceDate) return false;
+export function isLaunchPromoActive(
+  referenceDate: string | Date = new Date()
+): boolean {
   const target =
     typeof referenceDate === "string"
       ? referenceDate.length === 10
@@ -79,16 +84,16 @@ export function evaluateExpress10MinEligibility(params: {
       "Scope must be a single micro-edit (text swap, vector fix, or end-slate update)."
     );
   }
-  if (params.studioSlotConfirmed === false) {
-    reasons.push("Live studio production desk slot must be confirmed.");
+  if (params.studioSlotConfirmed !== true) {
+    reasons.push("Live studio production desk slot must be explicitly confirmed.");
   }
 
   return {
     eligible:
       serviceEligible &&
-      Boolean(params.sourceFilesReady) &&
-      Boolean(params.singleMicroEditConfirmed) &&
-      params.studioSlotConfirmed !== false,
+      params.sourceFilesReady === true &&
+      params.singleMicroEditConfirmed === true &&
+      params.studioSlotConfirmed === true,
     serviceEligible,
     reasons,
   };
@@ -175,14 +180,25 @@ export function calculatePricingSummary(
   let quoteRequired = false;
   const quoteReasons: string[] = [];
 
-  // Optional bundle base handling
+  const uniqueServiceIds = Array.from(new Set(serviceIds));
   const selectedBundle = bundleId
     ? CANONICAL_BUNDLES.find((b) => b.id === bundleId)
     : undefined;
 
-  for (const serviceId of serviceIds) {
+  if (bundleId && !selectedBundle) {
+    quoteRequired = true;
+    quoteReasons.push(`Unknown commercial bundle '${bundleId}' requires manual scoping.`);
+  }
+
+  for (const serviceId of uniqueServiceIds) {
     const service = serviceMap.get(serviceId);
-    if (!service) continue;
+    if (!service) {
+      quoteRequired = true;
+      quoteReasons.push(
+        `Unknown catalog service '${serviceId}' cannot be priced automatically.`
+      );
+      continue;
+    }
 
     const config = serviceConfigs[serviceId] || {};
     const rawQty = Number(config.quantity);
@@ -192,12 +208,18 @@ export function calculatePricingSummary(
         : 1;
     const rushApplied = Boolean(config.rush);
 
-    // Check variant multiplier if a scoped variant is selected
     const variant = config.variantId
       ? CANONICAL_VARIANTS.find(
           (v) => v.id === config.variantId && v.serviceId === service.id
         )
       : undefined;
+
+    if (config.variantId && !variant) {
+      quoteRequired = true;
+      quoteReasons.push(
+        `Variant '${config.variantId}' does not belong to ${service.id}; formal review required.`
+      );
+    }
 
     const baseServiceHours =
       typeof service.estimated_hours === "number" && service.estimated_hours > 0
@@ -208,11 +230,12 @@ export function calculatePricingSummary(
       ? Math.max(1, Math.round(baseServiceHours * variant.hourMultiplier))
       : baseServiceHours;
 
+    // Preserve DB-approved unit pricing when present without hardcoded multiplier drift
     const unitPriceBDT = variant
-      ? Math.round(unitHours * policy.hourlyRateBDT)
+      ? Math.round(service.base_bdt * variant.hourMultiplier)
       : service.base_bdt;
     const unitPriceUSD = variant
-      ? Math.round(unitHours * policy.hourlyRateUSD)
+      ? Math.round(service.base_usd * variant.hourMultiplier)
       : service.base_usd;
 
     const baseLineBDT = unitPriceBDT * quantity;
@@ -227,7 +250,7 @@ export function calculatePricingSummary(
         ? Math.round(baseLineUSD * policy.rushSurchargeRate)
         : 0;
 
-    const addOnIds = selectedAddOns[serviceId] || [];
+    const addOnIds = Array.from(new Set(selectedAddOns[serviceId] || []));
     const resolvedAddOns: PricingBreakdownItem["selectedAddOns"] = [];
     let itemAddOnsBDT = 0;
     let itemAddOnsUSD = 0;
@@ -235,7 +258,22 @@ export function calculatePricingSummary(
 
     for (const addOnId of addOnIds) {
       const addon = addOnMap.get(addOnId);
-      if (!addon) continue;
+      if (!addon) {
+        quoteRequired = true;
+        quoteReasons.push(`Unknown add-on '${addOnId}' requires studio scoping.`);
+        continue;
+      }
+      if (
+        Array.isArray(addon.compatible_services) &&
+        addon.compatible_services.length > 0 &&
+        !addon.compatible_services.includes(service.id)
+      ) {
+        quoteRequired = true;
+        quoteReasons.push(
+          `Add-on '${addon.id}' is not pre-compatible with ${service.id} and requires manual scoping.`
+        );
+        continue;
+      }
       resolvedAddOns.push({
         id: addon.id,
         label: addon.label,
@@ -269,7 +307,7 @@ export function calculatePricingSummary(
     ) {
       quoteRequired = true;
       quoteReasons.push(
-        `${service.title} (${service.id}) requires formal studio scoping.`
+        `${service.title} (${service.id}) is reference-scoped pending Owner Ratebook v8/v8.1 approval.`
       );
     }
 
@@ -292,18 +330,37 @@ export function calculatePricingSummary(
     });
   }
 
-  // If a commercial bundle was selected and no individual services overrode it
+  // Optional bundle base handling when no individual services overrode it
   if (selectedBundle && items.length === 0) {
     subtotalBDT = selectedBundle.baseBdt;
     subtotalUSD = selectedBundle.baseUsd;
     totalScopedHours = selectedBundle.estimatedHours;
+    if (
+      policy.enableQuoteGating &&
+      selectedBundle.pricingStatus !== "approved"
+    ) {
+      quoteRequired = true;
+      quoteReasons.push(
+        `Bundle ${selectedBundle.title} (${selectedBundle.id}) is reference-scoped pending Ratebook v8/v8.1 approval.`
+      );
+    }
+  } else if (selectedBundle && policy.enableQuoteGating && selectedBundle.pricingStatus !== "approved") {
+    quoteRequired = true;
+    quoteReasons.push(
+      `Bundle ${selectedBundle.title} (${selectedBundle.id}) requires studio quotation.`
+    );
+  }
+
+  if (items.length === 0 && !selectedBundle) {
+    quoteRequired = true;
+    quoteReasons.push("Select at least one valid catalog service or bundle.");
   }
 
   const grossBDT = subtotalBDT + rushSurchargeBDT + addOnsTotalBDT;
   const grossUSD = subtotalUSD + rushSurchargeUSD + addOnsTotalUSD;
 
-  // Evaluate 5% Launch Promotion Window (20 Nov – 15 Dec 2026 Asia/Dhaka)
-  const promoDate = evaluationDate ?? policy.evaluationDate;
+  // Evaluate 5% Launch Promotion Window (20 Nov – 15 Dec 2026 Asia/Dhaka) using server clock if omitted
+  const promoDate = evaluationDate ?? policy.evaluationDate ?? new Date();
   const promoActive = isLaunchPromoActive(promoDate);
   const promoDiscountBDT = promoActive
     ? Math.round(grossBDT * LAUNCH_PROMO_RATE)
@@ -316,10 +373,10 @@ export function calculatePricingSummary(
   const finalUSD = Math.max(0, grossUSD - promoDiscountUSD);
 
   if (policy.enableQuoteGating) {
-    if (serviceIds.length > policy.maxSelfServiceItems) {
+    if (uniqueServiceIds.length > policy.maxSelfServiceItems) {
       quoteRequired = true;
       quoteReasons.push(
-        `Multi-discipline package (${serviceIds.length} services) exceeds standard ${policy.maxSelfServiceItems}-service checkout threshold.`
+        `Multi-discipline package (${uniqueServiceIds.length} services) exceeds standard ${policy.maxSelfServiceItems}-service checkout threshold.`
       );
     }
 
@@ -356,6 +413,6 @@ export function calculatePricingSummary(
     finalUSD,
     currency,
     quoteRequired,
-    quoteReasons,
+    quoteReasons: Array.from(new Set(quoteReasons)),
   };
 }

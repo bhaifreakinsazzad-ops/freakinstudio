@@ -9,6 +9,8 @@ import { LanguageToggle } from "./language-toggle";
 import { useI18n } from "@/lib/i18n/context";
 import { BrandLogo } from "@/components/ui/BrandLogo";
 import { PWAInstallButton } from "@/components/pwa/pwa-install-button";
+import { isAdminRole } from "@/lib/permissions/roles";
+import type { UserRole } from "@/types/domain";
 
 interface NavbarProps {
   userEmail?: string | null;
@@ -20,6 +22,8 @@ export function Navbar({ userEmail, userRole }: NavbarProps) {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+  const isStudioAdmin = Boolean(userRole && isAdminRole(userRole as UserRole));
+
   const navItems = [
     { href: "/", label: t("nav.orbit", "Orbit Discovery") },
     { href: "/tools", label: t("nav.tools", "Free Tools (6)") },
@@ -28,7 +32,9 @@ export function Navbar({ userEmail, userRole }: NavbarProps) {
     { href: "/portfolio", label: t("nav.portfolio", "Concept Works") },
     { href: "/builder", label: t("nav.builder", "Smart Brief") },
     { href: "/dashboard", label: t("nav.portal", "Client Office") },
-    { href: "/admin", label: t("nav.admin", "Studio Pulse") },
+    ...(isStudioAdmin
+      ? [{ href: "/admin", label: t("nav.admin", "Studio Pulse") }]
+      : []),
   ];
 
   const isActive = (href: string) => {
@@ -41,7 +47,7 @@ export function Navbar({ userEmail, userRole }: NavbarProps) {
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 gap-2">
         <Link
           href="/"
-          className="flex items-center gap-3 shrink-0"
+          className="flex items-center gap-3 shrink-0 min-h-[44px]"
           aria-label="Freakin's Studio Home"
         >
           <BrandLogo size="sm" />
@@ -58,10 +64,10 @@ export function Navbar({ userEmail, userRole }: NavbarProps) {
               <Link
                 key={item.href}
                 href={item.href}
-                className={`px-2.5 py-1.5 rounded-lg transition-colors whitespace-nowrap ${
+                className={`px-2.5 py-2 rounded-lg transition-colors whitespace-nowrap ${
                   active
                     ? "bg-[#D9BD81] text-[#090A0A] font-semibold"
-                    : "text-[#F6F4EF]/75 hover:text-[#F6F4EF] hover:bg-[#232528]/60"
+                    : "text-[#F6F4EF]/80 hover:text-[#F6F4EF] hover:bg-[#232528]/60"
                 }`}
               >
                 {item.label}
@@ -76,17 +82,14 @@ export function Navbar({ userEmail, userRole }: NavbarProps) {
           <LanguageToggle />
           {userEmail ? (
             <div className="hidden sm:flex items-center gap-2">
-              {userRole &&
-                ["admin", "super_admin", "operations_manager"].includes(
-                  userRole
-                ) && (
-                  <Button
-                    render={<Link href="/admin">{t("nav.admin")}</Link>}
-                    variant="outline"
-                    size="sm"
-                    className="font-mono text-xs border-[#D9BD81]/40 text-[#D9BD81]"
-                  />
-                )}
+              {isStudioAdmin && (
+                <Button
+                  render={<Link href="/admin">{t("nav.admin")}</Link>}
+                  variant="outline"
+                  size="sm"
+                  className="font-mono text-xs border-[#D9BD81]/40 text-[#D9BD81]"
+                />
+              )}
               <Button
                 render={<Link href="/dashboard">{t("nav.portal")}</Link>}
                 size="sm"
@@ -99,7 +102,7 @@ export function Navbar({ userEmail, userRole }: NavbarProps) {
                 render={<Link href="/login">{t("nav.signin")}</Link>}
                 variant="ghost"
                 size="sm"
-                className="text-xs font-mono text-[#F6F4EF]/75 hover:text-[#F6F4EF]"
+                className="text-xs font-mono text-[#F6F4EF]/80 hover:text-[#F6F4EF]"
               />
               <Button
                 render={<Link href="/builder">{t("nav.launch")}</Link>}
@@ -117,7 +120,7 @@ export function Navbar({ userEmail, userRole }: NavbarProps) {
             aria-label={
               mobileMenuOpen ? "Close navigation menu" : "Open navigation menu"
             }
-            className="xl:hidden inline-flex items-center justify-center rounded-md border border-[#232528] bg-[#121315] p-2 text-[#F6F4EF] hover:border-[#D9BD81]/50 transition-colors"
+            className="xl:hidden inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md border border-[#232528] bg-[#121315] p-2 text-[#F6F4EF] hover:border-[#D9BD81]/50 transition-colors"
           >
             {mobileMenuOpen ? (
               <X className="h-4 w-4" />
@@ -140,7 +143,7 @@ export function Navbar({ userEmail, userRole }: NavbarProps) {
                 key={item.href}
                 href={item.href}
                 onClick={() => setMobileMenuOpen(false)}
-                className={`rounded-lg border px-3 py-2.5 transition-colors ${
+                className={`flex min-h-[44px] items-center rounded-lg border px-3 py-2.5 transition-colors ${
                   isActive(item.href)
                     ? "border-[#D9BD81] bg-[#D9BD81]/15 text-[#D9BD81] font-semibold"
                     : "border-[#232528] bg-[#121315]/60 text-[#F6F4EF] hover:border-[#D9BD81]/40"
@@ -151,17 +154,27 @@ export function Navbar({ userEmail, userRole }: NavbarProps) {
             ))}
           </div>
           <div className="pt-2 border-t border-[#232528]/60 flex items-center justify-between gap-2">
-            <Link
-              href="/login"
-              onClick={() => setMobileMenuOpen(false)}
-              className="text-xs font-mono text-[#F6F4EF]/70 hover:text-[#F6F4EF] px-2 py-1.5"
-            >
-              {t("nav.signin")}
-            </Link>
+            {userEmail ? (
+              <Link
+                href="/dashboard"
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex min-h-[44px] items-center text-xs font-mono text-[#D9BD81] px-2"
+              >
+                {userEmail}
+              </Link>
+            ) : (
+              <Link
+                href="/login"
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex min-h-[44px] items-center text-xs font-mono text-[#F6F4EF]/80 hover:text-[#F6F4EF] px-2"
+              >
+                {t("nav.signin")}
+              </Link>
+            )}
             <Link
               href="/builder"
               onClick={() => setMobileMenuOpen(false)}
-              className="rounded-lg bg-[#D9BD81] px-4 py-2 text-xs font-mono font-semibold text-[#090A0A]"
+              className="flex min-h-[44px] items-center rounded-lg bg-[#D9BD81] px-4 py-2 text-xs font-mono font-semibold text-[#090A0A]"
             >
               {t("nav.launch")}
             </Link>

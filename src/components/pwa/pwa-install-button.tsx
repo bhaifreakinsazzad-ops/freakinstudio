@@ -109,7 +109,7 @@ export function PWAInstallButton() {
       <button
         type="button"
         onClick={handleClick}
-        className="inline-flex items-center gap-1.5 rounded-lg border border-[#D9BD81]/35 bg-[#D9BD81]/10 px-2.5 py-1.5 text-[11px] font-mono text-[#D9BD81] hover:bg-[#D9BD81]/20 transition-colors"
+        className="inline-flex items-center gap-1.5 rounded-lg border border-[#D9BD81]/35 bg-[#D9BD81]/10 px-2.5 py-1.5 text-[11px] font-mono text-[#D9BD81] hover:bg-[#D9BD81]/20 transition-colors min-h-[44px]"
         title="Install Freakin's Studio Creative Office OS"
       >
         <Download className="h-3.5 w-3.5" />

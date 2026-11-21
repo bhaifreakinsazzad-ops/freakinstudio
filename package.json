@@ -9,6 +9,7 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test:unit": "vitest run tests/unit",
+    "test:node": "tsx --test src/lib/pricing/engine.node.test.ts",
     "test:integration": "vitest run tests/integration",
     "extract:catalog": "tsx scripts/extract-legacy-catalog.ts",
     "seed:catalog": "tsx scripts/seed-services.ts",

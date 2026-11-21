@@ -11,6 +11,7 @@ import {
   getAllServiceAddOnsMap,
   getAddOnFamily,
   getServiceConfigSchema,
+  RATEBOOK_VERSION,
 } from "@/lib/catalog";
 
 describe("Canonical Creative Catalog (Creative Office OS 2.0 — 4 / 13 / 15 / 5 / 14)", () => {
@@ -21,7 +22,8 @@ describe("Canonical Creative Catalog (Creative Office OS 2.0 — 4 / 13 / 15 / 5
     expect(ids).toEqual(["DISC-01", "DISC-02", "DISC-03", "DISC-04"]);
   });
 
-  it("contains exactly 13 canonical core services (SRV-01 to SRV-13) with 2 consolidated revisions", async () => {
+  it("contains exactly 13 canonical core services (SRV-01 to SRV-13) gated pending Ratebook v8/v8.1 approval", async () => {
+    expect(RATEBOOK_VERSION).toBe("v2.0-pending-ratebook-v8_1");
     const services = await getCatalogServices();
     expect(services.length).toBe(13);
 
@@ -32,6 +34,7 @@ describe("Canonical Creative Catalog (Creative Office OS 2.0 — 4 / 13 / 15 / 5
       expect(s.base_bdt).toBeGreaterThan(0);
       expect(s.base_usd).toBeGreaterThan(0);
       expect(s.estimated_hours).toBeGreaterThan(0);
+      expect(s.pricing_status).toBe("quote_required");
       expect(s.title_bn).toBeTruthy();
     }
 
@@ -49,7 +52,7 @@ describe("Canonical Creative Catalog (Creative Office OS 2.0 — 4 / 13 / 15 / 5
     expect(expressIds).toEqual(["SRV-02", "SRV-05", "SRV-13"]);
   });
 
-  it("contains exactly 15 scoped service variants (VAR-01 to VAR-15) and 5 commercial bundles (BND-01 to BND-05)", () => {
+  it("contains exactly 15 scoped service variants (VAR-01 to VAR-15) and 5 quote-gated bundles (BND-01 to BND-05)", () => {
     const variants = getCatalogVariants();
     expect(variants.length).toBe(15);
 
@@ -58,6 +61,7 @@ describe("Canonical Creative Catalog (Creative Office OS 2.0 — 4 / 13 / 15 / 5
     for (const b of bundles) {
       expect(b.revisions).toBe(2);
       expect(b.includedServiceIds.length).toBeGreaterThanOrEqual(2);
+      expect(b.pricingStatus).toBe("quote_required");
     }
   });
 
@@ -74,9 +78,12 @@ describe("Canonical Creative Catalog (Creative Office OS 2.0 — 4 / 13 / 15 / 5
     }
   });
 
-  it("contains 3 proposed AI Micro-Kits (৳49, ৳99, ৳199) and 4 Concept Works labeled Concept Work — Not Client Work", () => {
+  it("contains 3 proposed AI Micro-Kits with checkoutEnabled=false and 4 Concept Works labeled Concept Work — Not Client Work", () => {
     const kits = getCatalogAIMicroKits();
     expect(kits.map((k) => k.priceBdt)).toEqual([49, 99, 199]);
+    for (const kit of kits) {
+      expect(kit.checkoutEnabled).toBe(false);
+    }
 
     const works = getCatalogConceptWorks();
     expect(works.length).toBe(4);
@@ -112,6 +119,7 @@ describe("Canonical Creative Catalog (Creative Office OS 2.0 — 4 / 13 / 15 / 5
     const legacyA01 = await getServiceById("A01");
     expect(legacyA01).not.toBeNull();
     expect(legacyA01?.id).toBe("A01");
+    expect(legacyA01?.pricing_status).toBe("quote_required");
 
     const schema02 = getServiceConfigSchema("SRV-02");
     expect(schema02.express10MinEligible).toBe(true);

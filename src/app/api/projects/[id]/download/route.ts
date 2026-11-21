@@ -8,6 +8,16 @@ export async function GET(
 ) {
   try {
     const { id: projectId } = await params;
+    if (
+      !process.env.NEXT_PUBLIC_SUPABASE_URL ||
+      !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    ) {
+      return new NextResponse(
+        "Service Unavailable: Storage & authentication backend is not configured.",
+        { status: 503 }
+      );
+    }
+
     const supabase = await createClient();
     const {
       data: { user },
@@ -20,11 +30,18 @@ export async function GET(
     }
 
     // Fetch project
-    const { data: rawProject } = await supabase
+    const { data: rawProject, error: projectErr } = await supabase
       .from("projects")
       .select("*")
       .eq("id", projectId)
-      .single();
+      .maybeSingle();
+
+    if (projectErr) {
+      return new NextResponse(
+        "Service Unavailable: Failed to verify project authorization.",
+        { status: 503 }
+      );
+    }
 
     const project = rawProject as {
       id: string;
@@ -196,19 +213,18 @@ Freakin's Studio Creative Operations & Commercial Licensing Desk
       JSON.stringify(
         {
           schemaVersion: "1.0.0",
+          brandBook: "Freakin's Studio Brand Book v1.0",
           project: title,
           orderRef,
           colors: {
-            primary: "#09090b",
-            highlight: "#2563eb",
-            accent: "#10b981",
-            textLight: "#f4f4f5",
-            textMuted: "#71717a",
-            surface: "#18181b",
+            obsidian: "#090A0A",
+            champagneGold: "#D9BD81",
+            studioIvory: "#F6F4EF",
+            graphite: "#232528",
           },
           typography: {
-            headings: "Inter / Space Grotesk",
-            body: "Inter",
+            headings: "Lato Heavy",
+            body: "Lato Regular / Noto Sans Bengali",
             monospace: "JetBrains Mono",
           },
           grid: {
@@ -276,7 +292,7 @@ Freakin's Studio Creative Operations & Commercial Licensing Desk
       }
     }
 
-    // Record delivery event
+    // Record delivery event & project timeline event
     await supabase.from("delivery_events").insert({
       project_id: projectId,
       downloaded_by: user.id,
@@ -286,6 +302,15 @@ Freakin's Studio Creative Operations & Commercial Licensing Desk
         asset_count: approvedAssets.length,
         downloaded_at: new Date().toISOString(),
       },
+    });
+
+    await supabase.from("project_events").insert({
+      project_id: projectId,
+      actor_kind: "client",
+      actor_id: user.id,
+      event_type: "DELIVERABLE_DOWNLOADED",
+      visibility: "client",
+      summary: `Verified master archive ZIP downloaded (${approvedAssets.length} approved asset(s)).`,
     });
 
     // Generate zip binary buffer

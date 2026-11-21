@@ -72,25 +72,30 @@ export type ServiceCategory = Omit<
   created_at?: string;
 };
 
-export type Service = Database["public"]["Tables"]["services"]["Row"] & {
+export type Service = Omit<
+  Database["public"]["Tables"]["services"]["Row"],
+  "express_rule" | "ratebook_version" | "ratebook_approved" | "included" | "excluded" | "formats"
+> & {
   code?: string;
   discipline_id?: string;
   estimated_hours?: number;
   express_eligible?: boolean;
-  express_rule?: string;
+  express_rule?: string | null;
   included?: string[];
   excluded?: string[];
   formats?: string[];
-  summary?: string;
+  summary?: string | null;
+  ratebook_version?: string;
+  ratebook_approved?: boolean;
   created_at?: string;
 };
 
 export type AddOn = Database["public"]["Tables"]["add_ons"]["Row"] & {
   code?: string;
-  label_bn?: string;
+  label_bn?: string | null;
   extra_hours?: number;
   compatible_services?: string[];
-  summary?: string;
+  summary?: string | null;
   created_at?: string;
 };
 
@@ -116,6 +121,7 @@ export interface CommercialBundle {
   deliverables: string[];
   baseBdt: number;
   baseUsd: number;
+  pricingStatus?: PricingStatus;
 }
 
 export interface AIMicroKit {
@@ -125,6 +131,7 @@ export interface AIMicroKit {
   priceBdt: number;
   priceUsd: number;
   statusLabel: string;
+  checkoutEnabled?: boolean;
   targetAudience: string;
   includedOutputs: string[];
   explicitExclusions: string[];
