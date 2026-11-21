@@ -4,18 +4,19 @@ import { Footer } from "@/components/layout/footer";
 import {
   getCatalogCategories,
   getCatalogServices,
+  getCatalogVariants,
+  getCatalogBundles,
   getAllAddOns,
   getAllServiceAddOnsMap,
 } from "@/lib/catalog";
 import { createClient } from "@/lib/supabase/server";
-import type { PackageDraft } from "@/types/domain";
-import { getUserDraftsAction } from "./actions";
 import { PackageBuilderClient } from "./package-builder-client";
 
 export const metadata: Metadata = {
-  title: "Build Your Creative Package — Freakin's Studio",
+  title:
+    "Smart Project Brief & Hourly Scope Estimator — Freakin's Studio",
   description:
-    "Assemble and configure your multi-disciplinary creative production package across 60 canonical services with instant pricing calculations and quotation routing.",
+    "Configure your creative production scope across 13 core services, 15 variants, 5 commercial bundles, and 14 compatible add-ons with transparent hourly pricing.",
 };
 
 export const instant = false;
@@ -23,74 +24,49 @@ export const instant = false;
 export default async function BuilderPage({
   searchParams,
 }: {
-  searchParams: Promise<{ service?: string; payment?: string; error?: string }>;
+  searchParams: Promise<{ service?: string; bundle?: string }>;
 }) {
-  const { service: rawServiceId, payment: paymentStatus, error: paymentError } =
-    await searchParams;
-
+  const params = await searchParams;
   const [categories, services, addOns] = await Promise.all([
     getCatalogCategories(),
     getCatalogServices(),
     getAllAddOns(),
   ]);
-
-  const normalizedServiceId = rawServiceId?.toUpperCase();
-  const initialServiceId =
-    normalizedServiceId && services.some((s) => s.id === normalizedServiceId)
-      ? normalizedServiceId
-      : undefined;
-
+  const variants = getCatalogVariants();
+  const bundles = getCatalogBundles();
   const serviceAddOnsMap = getAllServiceAddOnsMap();
 
-  let user = null;
-  let initialDrafts: PackageDraft[] = [];
-
-  if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+  let userEmail: string | null = null;
+  if (
+    process.env.NEXT_PUBLIC_SUPABASE_URL &&
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  ) {
     try {
       const supabase = await createClient();
       const {
-        data: { user: authUser },
+        data: { user },
       } = await supabase.auth.getUser();
-      user = authUser;
-
-      if (user) {
-        const draftsRes = await getUserDraftsAction();
-        if (draftsRes.ok && draftsRes.drafts) {
-          initialDrafts = draftsRes.drafts;
-        }
-      }
+      userEmail = user?.email ?? null;
     } catch {
-      user = null;
+      // Guest viewer
     }
   }
 
   return (
     <>
-      <Navbar />
-      <main className="flex-1 bg-brand-black">
-        <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 space-y-8">
-          <div className="space-y-2">
-            <span className="badge-mono text-brand-highlight">
-              Signature Creative Commerce Configurator
-            </span>
-            <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-brand-light">
-              Build Your Creative Package
-            </h1>
-            <p className="text-brand-muted max-w-2xl text-xs sm:text-sm font-mono">
-              Configure services, quantities, deliverable formats and specialized add-ons with real-time server-authoritative pricing or request a formal commercial quotation.
-            </p>
-          </div>
-
+      <Navbar userEmail={userEmail} />
+      <main className="flex-1 py-10 px-4 sm:px-6 bg-[#090A0A]">
+        <div className="mx-auto max-w-7xl">
           <PackageBuilderClient
             categories={categories}
             services={services}
+            variants={variants}
+            bundles={bundles}
             addOns={addOns}
             serviceAddOnsMap={serviceAddOnsMap}
-            initialDrafts={initialDrafts}
-            initialServiceId={initialServiceId}
-            paymentStatus={paymentStatus}
-            paymentError={paymentError}
-            isAuthenticated={!!user}
+            initialServiceId={params.service || "SRV-01"}
+            initialBundleId={params.bundle || null}
+            isAuthenticated={Boolean(userEmail)}
           />
         </div>
       </main>

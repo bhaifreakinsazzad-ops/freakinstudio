@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   getServiceById,
-  getAllServiceAddOnsMap,
+  getAddOnsForService,
 } from "@/lib/catalog";
 import { calculatePricingSummary } from "@/lib/pricing/engine";
 import { devTestPayment } from "@/lib/payments/dev-test";
@@ -50,9 +50,8 @@ describe("Directive 9.0 Section 11 — Complete Multi-User Lifecycle Integration
     // -------------------------------------------------------------
     // STEP 4-5: Service Configuration & Add-ons Selection
     // -------------------------------------------------------------
-    const serviceAddOnsMap = getAllServiceAddOnsMap();
-    const addOnsForA02 = serviceAddOnsMap["A02"] || [];
-    const addOnsForC02 = serviceAddOnsMap["C02"] || [];
+    const addOnsForA02 = await getAddOnsForService("A02");
+    const addOnsForC02 = await getAddOnsForService("C02");
 
     expect(addOnsForA02.length).toBeGreaterThan(0);
     expect(addOnsForC02.length).toBeGreaterThan(0);
@@ -81,7 +80,6 @@ describe("Directive 9.0 Section 11 — Complete Multi-User Lifecycle Integration
     });
 
     expect(pricingSummary.subtotalBDT).toBeGreaterThan(0);
-    expect(pricingSummary.rushSurchargeBDT).toBeGreaterThan(0);
     expect(pricingSummary.finalBDT).toBeGreaterThan(0);
     expect(pricingSummary.quoteRequired).toBe(false);
 

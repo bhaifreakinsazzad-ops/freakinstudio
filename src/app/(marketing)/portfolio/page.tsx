@@ -4,201 +4,151 @@ import { Navbar } from "@/components/layout/navbar";
 import { Footer } from "@/components/layout/footer";
 import { Button } from "@/components/ui/button";
 import { ShowcaseImage } from "@/components/ui/ShowcaseImage";
+import { CANONICAL_CONCEPT_WORKS } from "@/lib/catalog";
 
 export const metadata: Metadata = {
-  title: "Portfolio Showcase — Freakin's Studio",
+  title: "Concept Works Showcase — Freakin's Studio",
   description:
-    "Exemplary brand identity systems, commercial video & 3D motion, AI-assisted creative production, luxury packaging, ad suites, and corporate decks engineered by Freakin's Studio.",
+    "Curated studio design studies and technical craft specimens across Brand Identity, Social Campaign Creative, Print & Packaging, and Motion Graphics.",
 };
 
 export const instant = false;
-
-interface PortfolioProject {
-  id: string;
-  categoryCode: "A" | "B" | "C" | "D" | "E" | "F" | "G";
-  categoryName: string;
-  title: string;
-  client: string;
-  description: string;
-  deliverables: string[];
-  metrics: string;
-  imageUrl: string;
-  serviceId: string;
-}
-
-const PORTFOLIO_PROJECTS: PortfolioProject[] = [
-  {
-    id: "p-aurum",
-    categoryCode: "B",
-    categoryName: "Brand Identity & Development",
-    title: "Aurum Autonomous — Complete Brand Identity System",
-    client: "Aurum Robotics Corp",
-    description:
-      "Mathematical monogram architecture, embossed obsidian stationery suite, typography specifications, and comprehensive brand book for a Series-A robotics company.",
-    deliverables: ["Vector Master SVG & AI", "Brand Guidelines Book", "Stationery & Executive Kit"],
-    metrics: "4.8x increase in Series-A pitch visual confidence",
-    imageUrl: "/images/portfolio/brand-identity.jpg",
-    serviceId: "B02",
-  },
-  {
-    id: "p-motion-aura",
-    categoryCode: "C",
-    categoryName: "Video Production, Editing & Motion Graphics",
-    title: "Motion Aura — 4K Kinetic Brand Film & 3D Sequence",
-    client: "Kinetic Interactive Labs",
-    description:
-      "Full 4K commercial edit, metallic gold 3D animated typography sequences, broadcast color grading, and multi-aspect vertical/widescreen delivery cutdowns.",
-    deliverables: ["4K ProRes & MP4 Master", "After Effects Source", "9:16 & 16:9 Cutdowns"],
-    metrics: "1.4M organic launch views in first 14 days",
-    imageUrl: "/images/portfolio/video-motion.jpg",
-    serviceId: "C05",
-  },
-  {
-    id: "p-aetheria",
-    categoryCode: "F",
-    categoryName: "Digital & AI-Powered Creative Production",
-    title: "Aetheria Spatial — AI-Assisted Hardware Film & Stills",
-    client: "Aetheria Audio Systems",
-    description:
-      "AI-assisted generative storyboard pipeline combined with studio-grade retouching and dynamic hardware video reveal sequences for a global hardware reveal.",
-    deliverables: ["8K Generative Product Stills", "AI Video Reveal Sequences", "Layered Retouch PSD"],
-    metrics: "2,400 pre-order units reserved within 48 hours",
-    imageUrl: "/images/portfolio/ai-creative.jpg",
-    serviceId: "F02",
-  },
-  {
-    id: "p-aura-nocturne",
-    categoryCode: "A",
-    categoryName: "Graphic Design & Visual Communication",
-    title: "Aura Nocturne — Tactile Luxury Packaging & Crest Graphics",
-    client: "Aura Nocturne Fragrance House",
-    description:
-      "Custom geometric emblem, matte rigid unboxing structural dielines, hot-foil stamping specs, and print-ready CMYK pre-press packaging masters.",
-    deliverables: ["Die-Cut Vector Dielines", "Foil & Spot UV Specs", "Print-Ready CMYK Masters"],
-    metrics: "500-unit limited first run sold out in 72 hours",
-    imageUrl: "/images/portfolio/luxury-packaging.jpg",
-    serviceId: "A09",
-  },
-  {
-    id: "p-monolith-ads",
-    categoryCode: "E",
-    categoryName: "Advertising & Marketing Creative",
-    title: "Monolith Drop — High-Converting Paid Advertising Matrix",
-    client: "Monolith Performance Wear",
-    description:
-      "Performance acquisition ad suite engineered for Meta, Instagram, Google Display Network, and retargeting funnels with high-contrast architectural lighting.",
-    deliverables: ["16 Ad Aspect Variations", "Static & Motion Ad Stems", "A/B Hook Creative Pack"],
-    metrics: "+42% ROAS uplift over previous agency baseline",
-    imageUrl: "/images/portfolio/ad-campaign.jpg",
-    serviceId: "E01",
-  },
-  {
-    id: "p-arcturus",
-    categoryCode: "G",
-    categoryName: "Corporate & Business Communication",
-    title: "Arcturus Holdings — Executive Investor Deck & Annual Report",
-    client: "Arcturus Capital Partners",
-    description:
-      "28-slide executive investor pitch deck and hardcover annual report system with custom financial data visualization charts in champagne gold and obsidian.",
-    deliverables: ["Editable Keynote / PPTX", "Vector Financial Charts", "Executive Print & PDF"],
-    metrics: "$24M institutional capital committed post-roadshow",
-    imageUrl: "/images/portfolio/corporate-deck.jpg",
-    serviceId: "G03",
-  },
-];
 
 export default function PortfolioPage() {
   return (
     <>
       <Navbar />
-      <main className="flex-1 py-16 px-4 sm:px-6">
+      <main className="flex-1 py-16 px-4 sm:px-6 bg-[#090A0A]">
         <div className="mx-auto max-w-7xl space-y-12">
           {/* Header */}
           <div className="space-y-4 max-w-3xl">
-            <span className="badge-mono text-brand-highlight">Excellence in Production</span>
-            <h1 className="text-4xl sm:text-6xl font-bold tracking-tight text-brand-light text-balance">
-              Crafted for Commercial Impact.
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="badge-mono rounded border border-[#D9BD81]/40 bg-[#D9BD81]/10 px-2.5 py-1 text-[#D9BD81]">
+                Concept Work — Not Client Work
+              </span>
+              <span className="badge-mono text-[#F6F4EF]/60">
+                Zero Fabricated Metrics Policy
+              </span>
+            </div>
+            <h1 className="text-4xl sm:text-6xl font-bold tracking-tight text-[#F6F4EF] text-balance">
+              Studio Craft &amp; Technical Specimens.
             </h1>
-            <p className="text-base sm:text-lg text-brand-muted leading-relaxed">
-              Explore recent production milestones delivered at Freakin&apos;s Studio. Every project maps directly to our
-              canonical 60-service catalog, structured proofing rounds, and perpetual commercial buyout licensing.
+            <p className="text-base sm:text-lg text-[#F6F4EF]/70 leading-relaxed">
+              Every specimen below is an internal Freakin&apos;s Studio design
+              study explicitly labeled{" "}
+              <strong className="text-[#D9BD81]">
+                Concept Work — Not Client Work
+              </strong>
+              . We demonstrate our vector geometry, print pre-press accuracy,
+              and motion pacing transparently—without inventing fabricated
+              client revenue or ROAS numbers.
             </p>
             <div className="pt-2 flex flex-wrap gap-3">
               <Button
-                render={<Link href="/builder">Launch Package Builder &rarr;</Link>}
+                render={<Link href="/builder">Start Smart Brief &rarr;</Link>}
                 size="lg"
-                className="cyber-glow bg-brand-highlight hover:bg-brand-highlight/90 text-brand-black font-semibold font-mono text-sm"
+                className="cyber-glow bg-[#D9BD81] hover:bg-[#D9BD81]/90 text-[#090A0A] font-semibold font-mono text-sm"
               />
               <Button
-                render={<Link href="/case-studies">Read Deep-Dive Case Studies</Link>}
+                render={<Link href="/case-studies">View Technical Studies</Link>}
                 size="lg"
                 variant="outline"
-                className="font-mono text-sm border-brand-border text-brand-light"
+                className="font-mono text-sm border-[#232528] text-[#F6F4EF]"
               />
             </div>
           </div>
 
-          {/* Grid of Showcase Projects */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {PORTFOLIO_PROJECTS.map((proj) => (
+          {/* Grid of Truthful Concept Works */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {CANONICAL_CONCEPT_WORKS.map((work) => (
               <div
-                key={proj.id}
-                className="group flex flex-col justify-between rounded-xl border border-brand-border bg-brand-surface/40 overflow-hidden hover:border-brand-highlight/40 transition-colors duration-200"
+                key={work.id}
+                className="group flex flex-col justify-between rounded-2xl border border-[#232528] bg-[#121315] overflow-hidden hover:border-[#D9BD81]/50 transition-colors duration-200"
               >
                 <div>
-                  <div className="relative h-56 w-full overflow-hidden bg-brand-surface">
-                    <ShowcaseImage
-                      src={proj.imageUrl}
-                      alt={proj.title}
-                      caption={proj.title}
-                      className="object-cover transition-transform duration-500 group-hover:scale-105"
-                    />
+                  <div className="relative h-60 w-full overflow-hidden bg-[#232528]">
+                    {work.imageUrl && (
+                      <ShowcaseImage
+                        src={work.imageUrl}
+                        alt={work.title}
+                        caption={work.title}
+                        className="object-cover transition-transform duration-500 group-hover:scale-105"
+                      />
+                    )}
+                    <div className="absolute top-3 left-3 z-10">
+                      <span className="inline-flex items-center rounded-md border border-[#D9BD81]/50 bg-[#090A0A]/90 px-2.5 py-1 font-mono text-[10px] font-bold uppercase tracking-wider text-[#D9BD81] backdrop-blur-md">
+                        Concept Work — Not Client Work
+                      </span>
+                    </div>
+                    <div className="absolute top-3 right-3 z-10">
+                      <span className="inline-flex items-center rounded-md border border-[#232528] bg-[#090A0A]/85 px-2 py-1 font-mono text-[10px] text-[#F6F4EF]/80">
+                        {work.id} &middot; {work.serviceId}
+                      </span>
+                    </div>
                   </div>
 
                   {/* Body */}
                   <div className="p-6 space-y-4">
                     <div className="space-y-1.5">
-                      <p className="text-xs font-mono text-brand-muted">
-                        Cat {proj.categoryCode} · {proj.categoryName}
+                      <p className="text-xs font-mono text-[#D9BD81]">
+                        {work.disciplineId} &middot; {work.categoryLabel}
                       </p>
-                      <h3 className="text-lg font-bold text-brand-light group-hover:text-brand-highlight transition-colors">
-                        {proj.title}
-                      </h3>
-                      <p className="text-xs font-mono text-brand-highlight">{proj.client}</p>
+                      <h2 className="text-xl font-bold text-[#F6F4EF] group-hover:text-[#D9BD81] transition-colors">
+                        {work.title}
+                      </h2>
                     </div>
 
-                    <p className="text-xs text-brand-muted leading-relaxed">
-                      {proj.description}
+                    <p className="text-xs text-[#F6F4EF]/75 leading-relaxed">
+                      {work.visualTheme}
                     </p>
 
-                    <div className="space-y-1 pt-2 border-t border-brand-border/50">
-                      <span className="text-[10px] font-mono uppercase text-brand-muted block">
-                        Deliverables Included
+                    <div className="rounded-xl border border-[#232528] bg-[#090A0A]/60 p-3.5 space-y-1">
+                      <span className="text-[10px] font-mono uppercase text-[#D9BD81] block">
+                        Craft &amp; Production Rationale
                       </span>
-                      <p className="text-xs font-mono text-brand-light/90">
-                        {proj.deliverables.join(" · ")}
+                      <p className="text-xs text-[#F6F4EF]/70 leading-relaxed">
+                        {work.rationale}
                       </p>
                     </div>
 
-                    <p className="text-xs font-mono text-emerald-400 pt-1">
-                      Outcome: {proj.metrics}
-                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-[#232528]">
+                      <div>
+                        <span className="text-[10px] font-mono uppercase text-[#F6F4EF]/50 block">
+                          Specimen Deliverables
+                        </span>
+                        <p className="text-xs font-mono text-[#F6F4EF]/90 mt-0.5">
+                          {work.deliverables.join(" · ")}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-mono uppercase text-[#F6F4EF]/50 block">
+                          Master Formats
+                        </span>
+                        <p className="text-xs font-mono text-[#D9BD81] mt-0.5">
+                          {work.formats.join(" · ")}
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
                 {/* Footer action */}
-                <div className="px-6 py-4 border-t border-brand-border/60 flex items-center justify-between gap-2">
+                <div className="px-6 py-4 border-t border-[#232528] flex items-center justify-between gap-2 bg-[#090A0A]/40">
                   <Link
-                    href={`/services/${proj.serviceId}`}
-                    className="text-xs font-mono text-brand-muted hover:text-brand-light transition-colors whitespace-nowrap"
+                    href={`/services/${work.serviceId}`}
+                    className="text-xs font-mono text-[#F6F4EF]/70 hover:text-[#D9BD81] transition-colors whitespace-nowrap"
                   >
-                    Service {proj.serviceId} &rarr;
+                    Inspect {work.serviceId} Specification &rarr;
                   </Link>
                   <Button
-                    render={<Link href={`/builder?service=${proj.serviceId}`}>Configure Scope</Link>}
+                    render={
+                      <Link href={`/builder?service=${work.serviceId}`}>
+                        Scope Similar Study
+                      </Link>
+                    }
                     size="sm"
                     variant="outline"
-                    className="h-8 text-xs font-mono border-brand-border text-brand-light whitespace-nowrap"
+                    className="h-8 text-xs font-mono border-[#D9BD81]/40 text-[#D9BD81] whitespace-nowrap"
                   />
                 </div>
               </div>
@@ -206,19 +156,26 @@ export default function PortfolioPage() {
           </div>
 
           {/* Bottom Banner */}
-          <div className="rounded-2xl border border-brand-border bg-gradient-to-r from-brand-surface to-brand-border/30 p-8 sm:p-12 text-center space-y-4">
-            <h2 className="text-2xl sm:text-4xl font-bold text-brand-light text-balance">
-              Ready to elevate your commercial identity?
+          <div className="rounded-2xl border border-[#232528] bg-[#121315] p-8 sm:p-12 text-center space-y-4">
+            <h2 className="text-2xl sm:text-4xl font-bold text-[#F6F4EF] text-balance">
+              Commission Human Studio Craft with Transparent Hourly Scoping.
             </h2>
-            <p className="text-sm text-brand-muted max-w-xl mx-auto">
-              Our 7-step interactive Package Builder allows you to combine any of our 60 services, configure add-ons,
-              and receive instant authoritative pricing or an enterprise quotation.
+            <p className="text-sm text-[#F6F4EF]/70 max-w-xl mx-auto">
+              Select from our 13 core services, 15 scoped variants, 5 commercial
+              bundles, and 14 compatible add-ons—with 2 consolidated revisions
+              included.
             </p>
-            <div className="pt-2">
+            <div className="pt-2 flex flex-wrap justify-center gap-3">
               <Button
-                render={<Link href="/builder">Build Your Custom Creative Package</Link>}
+                render={<Link href="/builder">Launch 3-Step Smart Brief</Link>}
                 size="lg"
-                className="cyber-glow bg-brand-highlight hover:bg-brand-highlight/90 text-brand-black font-semibold font-mono text-sm"
+                className="cyber-glow bg-[#D9BD81] hover:bg-[#D9BD81]/90 text-[#090A0A] font-semibold font-mono text-sm"
+              />
+              <Button
+                render={<Link href="/tools">Try 6 Free Browser Tools</Link>}
+                size="lg"
+                variant="outline"
+                className="font-mono text-sm border-[#232528] text-[#F6F4EF]"
               />
             </div>
           </div>

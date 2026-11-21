@@ -1,9 +1,8 @@
 "use client";
 
-import { useState, useTransition, useMemo } from "react";
+import { useState } from "react";
+import Link from "next/link";
 import { toast } from "sonner";
-import type { Service, ServiceCategory, PricingStatus } from "@/types/domain";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -11,480 +10,602 @@ import {
   updateServicePricingAction,
   issueQuoteAction,
 } from "./actions";
-
-export interface AdminProject {
-  id: string;
-  title: string;
-  client_name?: string;
-  client_email?: string;
-  status: string;
-  current_round?: number;
-  max_rounds?: number;
-  revisions_used?: number;
-  max_revisions?: number;
-  package_name?: string;
-  total_amount?: number;
-  currency?: string;
-  due_date?: string;
-  brief?: {
-    brand_name?: string;
-    deliverable_format?: string;
-    color_palette?: string;
-    notes?: string;
-  };
-  tasks?: { id: string; title: string; status: string }[];
-  assets?: {
-    id: string;
-    title: string;
-    version: string;
-    file_url: string;
-    asset_type: string;
-    annotations_count?: number;
-  }[];
-  created_at: string;
-}
-
-export interface AdminQuote {
-  id: string;
-  quote_ref?: string;
-  customer_name?: string;
-  customer_email?: string;
-  service_names?: string[];
-  scope_summary?: string;
-  total_amount?: number;
-  currency?: string;
-  rush_delivery?: boolean;
-  status: string;
-  notes?: string | null;
-  amount_bdt?: number;
-  amount_usd?: number;
-  created_at: string;
-}
-
-export interface AdminOrder {
-  id: string;
-  order_number?: string;
-  order_ref?: string;
-  customer_name?: string;
-  total_amount?: number;
-  currency?: string;
-  payment_method?: string;
-  payment_status: string;
-  project_status?: string;
-  amount_bdt?: number;
-  amount_usd?: number;
-  created_at: string;
-}
-
-export interface AdminAuditLog {
-  id: string;
-  action?: string;
-  event_type?: string;
-  resource_type?: string;
-  resource_id?: string;
-  actor_email?: string;
-  actor_id?: string | null;
-  details?: string | Record<string, unknown> | null;
-  created_at: string;
-}
+import { CreativeOfficeOS } from "@/features/creative-office/creative-office-os";
+import type {
+  AdminProjectRow,
+  AdminQuoteRow,
+  AdminOrderRow,
+  AdminAuditLogRow,
+} from "./page";
+import type { Service, ProjectStatus } from "@/types/domain";
 
 interface AdminConsoleClientProps {
-  initialServices: Service[];
-  categories: ServiceCategory[];
-  initialProjects: AdminProject[];
-  initialQuotes: AdminQuote[];
-  initialOrders: AdminOrder[];
-  initialAuditLogs: AdminAuditLog[];
+  initialProjects: AdminProjectRow[];
+  initialQuotes: AdminQuoteRow[];
+  initialOrders: AdminOrderRow[];
+  initialAuditLogs: AdminAuditLogRow[];
+  services: Service[];
 }
 
-const KANBAN_COLUMNS = [
-  { id: "awaiting_brief", label: "Awaiting Brief" },
-  { id: "brief_submitted", label: "Brief Submitted" },
-  { id: "in_production", label: "In Production" },
-  { id: "client_review", label: "Client Review" },
-  { id: "revision_requested", label: "Revision Queued" },
-  { id: "client_approved", label: "Client Approved" },
-  { id: "completed", label: "Delivered / Done" },
+const PROJECT_STATUSES: ProjectStatus[] = [
+  "onboarding",
+  "brief_submitted",
+  "in_production",
+  "internal_qa",
+  "client_review",
+  "revision_requested",
+  "client_approved",
+  "delivered",
+  "archived",
 ];
 
 export function AdminConsoleClient({
-  initialServices,
-  categories,
   initialProjects,
   initialQuotes,
   initialOrders,
   initialAuditLogs,
+  services,
 }: AdminConsoleClientProps) {
-  const [activeTab, setActiveTab] = useState<"kanban" | "catalog" | "quotes" | "orders" | "audit">("kanban");
-  const [isPending, startTransition] = useTransition();
-
-  // Local state for live mutations
-  const [projects, setProjects] = useState<AdminProject[]>(initialProjects);
-  const [services, setServices] = useState<Service[]>(initialServices);
-  const [quotes, setQuotes] = useState<AdminQuote[]>(initialQuotes);
-
-  // Catalog manager filters
+  const [tab, setTab] = useState<
+    "studio_pulse_demo" | "projects" | "quotes" | "orders" | "catalog" | "audit"
+  >(initialProjects.length > 0 ? "projects" : "studio_pulse_demo");
+  const [projects, setProjects] = useState(initialProjects);
+  const [quotes, setQuotes] = useState(initialQuotes);
+  const [orders] = useState(initialOrders);
+  const [auditLogs] = useState(initialAuditLogs);
+  const [catalogList, setCatalogList] = useState(services);
   const [catalogSearch, setCatalogSearch] = useState("");
-  const [catalogCategory, setCatalogCategory] = useState("ALL");
+
+  const [quoteAmounts, setQuoteAmounts] = useState<
+    Record<string, { bdt: string; usd: string; notes: string }>
+  >({});
+
   const [editingServiceId, setEditingServiceId] = useState<string | null>(null);
-  const [editPriceBdt, setEditPriceBdt] = useState<number>(0);
-  const [editPriceUsd, setEditPriceUsd] = useState<number>(0);
+  const [editServiceValues, setEditServiceValues] = useState<{
+    bdt: string;
+    usd: string;
+    status: "approved" | "quote_required";
+  }>({ bdt: "", usd: "", status: "approved" });
 
-  // Quote desk state
-  const [selectedQuoteId, setSelectedQuoteId] = useState<string | null>(null);
-  const [quoteBdt, setQuoteBdt] = useState<number>(0);
-  const [quoteUsd, setQuoteUsd] = useState<number>(0);
-  const [quoteNotes, setQuoteNotes] = useState<string>("");
+  const handleStatusChange = async (projectId: string, newStatus: string) => {
+    setProjects((prev) =>
+      prev.map((p) => (p.id === projectId ? { ...p, status: newStatus } : p))
+    );
+    const res = await updateProjectStatusAction(projectId, newStatus);
+    if (res.ok) {
+      toast.success(`Project status updated to ${newStatus}`);
+    } else {
+      toast.error(res.error || "Failed to update status");
+    }
+  };
 
-  // Filtered services for catalog management
-  const filteredServices = useMemo(() => {
-    return services.filter((s) => {
-      const matchCat = catalogCategory === "ALL" || s.category_id === catalogCategory;
-      const q = catalogSearch.toLowerCase().trim();
-      const matchQ =
-        !q ||
-        s.id.toLowerCase().includes(q) ||
-        s.title.toLowerCase().includes(q) ||
-        (s.title_bn && s.title_bn.toLowerCase().includes(q));
-      return matchCat && matchQ;
-    });
-  }, [services, catalogCategory, catalogSearch]);
+  const handleIssueQuote = async (quoteId: string) => {
+    const entry = quoteAmounts[quoteId];
+    const bdt = Number(entry?.bdt || 15000);
+    const usd = Number(entry?.usd || 150);
+    const notes =
+      entry?.notes || "Approved hourly scope quotation issued by Studio Lead";
 
-  // Handle Project Status Transition in Kanban
-  const handleMoveProject = (projectId: string, nextStatus: string) => {
-    startTransition(async () => {
-      const res = await updateProjectStatusAction(projectId, nextStatus);
-      if (res.ok) {
-        setProjects((prev) =>
-          prev.map((p) => (p.id === projectId ? { ...p, status: nextStatus } : p))
-        );
-        toast.success(`Project moved to ${nextStatus.replace(/_/g, " ")}`);
-      } else {
-        toast.error(res.error || "Failed to update project status");
-      }
+    const res = await issueQuoteAction(quoteId, bdt, usd, notes);
+    if (res.ok) {
+      setQuotes((prev) =>
+        prev.map((q) =>
+          q.id === quoteId
+            ? {
+                ...q,
+                status: "issued",
+                amount_bdt: bdt,
+                amount_usd: usd,
+                admin_notes: notes,
+              }
+            : q
+        )
+      );
+      toast.success(`Formal quote ${quoteId.slice(0, 8)} issued`);
+    } else {
+      toast.error(res.error || "Failed to issue quotation");
+    }
+  };
+
+  const startEditService = (srv: Service) => {
+    setEditingServiceId(srv.id);
+    setEditServiceValues({
+      bdt: String(srv.base_bdt),
+      usd: String(srv.base_usd),
+      status: srv.pricing_status as "approved" | "quote_required",
     });
   };
 
-  // Handle Service Price / Status update
-  const handleSaveServicePricing = (serviceId: string) => {
-    startTransition(async () => {
-      const res = await updateServicePricingAction(serviceId, {
-        base_bdt: editPriceBdt,
-        base_usd: editPriceUsd,
-      });
-      if (res.ok) {
-        setServices((prev) =>
-          prev.map((s) =>
-            s.id === serviceId
-              ? { ...s, base_bdt: editPriceBdt, base_usd: editPriceUsd }
-              : s
-          )
-        );
-        setEditingServiceId(null);
-        toast.success(`Updated pricing for ${serviceId}`);
-      } else {
-        toast.error(res.error || "Failed to update pricing");
-      }
+  const saveEditService = async (serviceId: string) => {
+    const bdt = Number(editServiceValues.bdt);
+    const usd = Number(editServiceValues.usd);
+    if (!Number.isFinite(bdt) || bdt <= 0 || !Number.isFinite(usd) || usd <= 0) {
+      toast.error("Please enter valid positive numbers for BDT and USD rates.");
+      return;
+    }
+
+    const res = await updateServicePricingAction(serviceId, {
+      base_bdt: bdt,
+      base_usd: usd,
+      pricing_status: editServiceValues.status,
     });
+
+    if (res.ok) {
+      setCatalogList((prev) =>
+        prev.map((s) =>
+          s.id === serviceId
+            ? {
+                ...s,
+                base_bdt: bdt,
+                base_usd: usd,
+                pricing_status: editServiceValues.status,
+              }
+            : s
+        )
+      );
+      setEditingServiceId(null);
+      toast.success(`Updated ratebook entry for ${serviceId}`);
+    } else {
+      toast.error(res.error || "Failed to update service pricing");
+    }
   };
 
-  // Toggle Service Pricing Status (approved <-> quote_required)
-  const handleTogglePricingStatus = (service: Service) => {
-    const nextStatus: PricingStatus =
-      service.pricing_status === "approved" ? "quote_required" : "approved";
+  const filteredCatalog = catalogList.filter((s) => {
+    const q = catalogSearch.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      s.id.toLowerCase().includes(q) || s.title.toLowerCase().includes(q)
+    );
+  });
 
-    startTransition(async () => {
-      const res = await updateServicePricingAction(service.id, {
-        pricing_status: nextStatus,
-      });
-      if (res.ok) {
-        setServices((prev) =>
-          prev.map((s) =>
-            s.id === service.id ? { ...s, pricing_status: nextStatus } : s
-          )
-        );
-        toast.success(`Service ${service.id} marked as ${nextStatus}`);
-      } else {
-        toast.error(res.error || "Failed to toggle status");
-      }
-    });
-  };
-
-  // Issue formal quote
-  const handleIssueQuote = (quoteId: string) => {
-    startTransition(async () => {
-      const res = await issueQuoteAction(quoteId, quoteBdt, quoteUsd, quoteNotes);
-      if (res.ok) {
-        setQuotes((prev) =>
-          prev.map((q) =>
-            q.id === quoteId
-              ? {
-                  ...q,
-                  status: "issued",
-                  amount_bdt: quoteBdt,
-                  amount_usd: quoteUsd,
-                  notes: quoteNotes,
-                }
-              : q
-          )
-        );
-        setSelectedQuoteId(null);
-        toast.success("Formal approved quotation issued to client portal!");
-      } else {
-        toast.error(res.error || "Failed to issue quote");
-      }
-    });
-  };
+  const paidOrders = orders.filter((o) => o.status === "paid");
+  const totalRevenueBDT = paidOrders.reduce(
+    (sum, o) => sum + Number(o.total_bdt || 0),
+    0
+  );
 
   return (
     <div className="space-y-8">
-      {/* Executive KPI Overview */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 font-mono text-xs">
-        <div className="p-5 rounded-2xl bg-brand-surface border border-brand-border space-y-1">
-          <span className="text-[10px] text-brand-muted uppercase">Production Projects</span>
-          <span className="text-2xl font-black text-brand-light block">{projects.length}</span>
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#232528] pb-6">
+        <div>
+          <span className="badge-mono text-[#D9BD81]">
+            Studio Pulse Operations Console &bull; Zero Fabricated State
+          </span>
+          <h1 className="text-2xl sm:text-4xl font-bold text-[#F6F4EF] mt-1">
+            Studio Pulse &amp; Production Administration
+          </h1>
+          <p className="text-xs text-[#F6F4EF]/65 mt-1">
+            Live database queues show strictly verified records. Use the labeled{" "}
+            <strong className="text-[#D9BD81]">
+              DEMO DATA &bull; Studio Pulse Sandbox
+            </strong>{" "}
+            tab to test the connected Human + SI workflow with Client Office.
+          </p>
         </div>
-        <div className="p-5 rounded-2xl bg-brand-surface border border-brand-border space-y-1">
-          <span className="text-[10px] text-brand-muted uppercase">Pending Quotes</span>
-          <span className="text-2xl font-black text-amber-400 block">{quotes.length}</span>
-        </div>
-        <div className="p-5 rounded-2xl bg-brand-surface border border-brand-border space-y-1">
-          <span className="text-[10px] text-brand-muted uppercase">Verified Orders</span>
-          <span className="text-2xl font-black text-emerald-400 block">{initialOrders.length}</span>
-        </div>
-        <div className="p-5 rounded-2xl bg-brand-surface border border-brand-border space-y-1">
-          <span className="text-[10px] text-brand-muted uppercase">Canonical Services</span>
-          <span className="text-2xl font-black text-brand-highlight block">{services.length}</span>
+
+        <div className="grid grid-cols-3 gap-3 text-xs font-mono">
+          <div className="rounded-lg border border-[#232528] bg-[#121315] px-4 py-2.5">
+            <span className="text-[#F6F4EF]/55 block text-[10px] uppercase">
+              Live DB Projects
+            </span>
+            <span className="text-lg font-bold text-[#F6F4EF]">
+              {projects.length}
+            </span>
+          </div>
+          <div className="rounded-lg border border-[#232528] bg-[#121315] px-4 py-2.5">
+            <span className="text-[#F6F4EF]/55 block text-[10px] uppercase">
+              Live DB Quotes
+            </span>
+            <span className="text-lg font-bold text-[#D9BD81]">
+              {quotes.filter((q) => q.status === "requested").length}
+            </span>
+          </div>
+          <div className="rounded-lg border border-[#232528] bg-[#121315] px-4 py-2.5">
+            <span className="text-[#F6F4EF]/55 block text-[10px] uppercase">
+              Verified Settled BDT
+            </span>
+            <span className="text-lg font-bold text-emerald-400">
+              ৳{totalRevenueBDT.toLocaleString()}
+            </span>
+          </div>
         </div>
       </div>
 
       {/* Navigation Tabs */}
-      <div className="flex gap-2 border-b border-brand-border pb-3 overflow-x-auto cyber-scrollbar">
-        {[
-          { id: "kanban", label: "Operations Kanban" },
-          { id: "catalog", label: "Canonical Catalog (60)" },
-          { id: "quotes", label: "Quote Desk" },
-          { id: "orders", label: "Orders & Transactions" },
-          { id: "audit", label: "Audit Log Trail" },
-        ].map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id as "kanban" | "catalog" | "quotes" | "orders" | "audit")}
-            className={`px-4 py-2 rounded-xl text-xs font-mono font-bold whitespace-nowrap transition-all ${
-              activeTab === tab.id
-                ? "bg-brand-light text-brand-black shadow-md"
-                : "bg-brand-surface border border-brand-border text-brand-muted hover:text-brand-light"
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
+      <div className="flex flex-wrap gap-2 border-b border-[#232528] pb-3">
+        <button
+          type="button"
+          onClick={() => setTab("studio_pulse_demo")}
+          className={`px-4 py-2 rounded-lg text-xs font-mono transition-colors border ${
+            tab === "studio_pulse_demo"
+              ? "bg-[#D9BD81] text-[#090A0A] border-[#D9BD81] font-bold"
+              : "bg-[#121315] text-[#D9BD81] border-[#D9BD81]/40 hover:bg-[#D9BD81]/10"
+          }`}
+        >
+          DEMO DATA &bull; Studio Pulse Command Center (Connected to Client
+          Office)
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab("projects")}
+          className={`px-4 py-2 rounded-lg text-xs font-mono transition-colors ${
+            tab === "projects"
+              ? "bg-[#D9BD81] text-[#090A0A] font-bold"
+              : "bg-[#121315] text-[#F6F4EF]/70 hover:text-[#F6F4EF]"
+          }`}
+        >
+          Live DB Projects ({projects.length})
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab("quotes")}
+          className={`px-4 py-2 rounded-lg text-xs font-mono transition-colors ${
+            tab === "quotes"
+              ? "bg-[#D9BD81] text-[#090A0A] font-bold"
+              : "bg-[#121315] text-[#F6F4EF]/70 hover:text-[#F6F4EF]"
+          }`}
+        >
+          Live DB Quotes ({quotes.length})
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab("orders")}
+          className={`px-4 py-2 rounded-lg text-xs font-mono transition-colors ${
+            tab === "orders"
+              ? "bg-[#D9BD81] text-[#090A0A] font-bold"
+              : "bg-[#121315] text-[#F6F4EF]/70 hover:text-[#F6F4EF]"
+          }`}
+        >
+          Live DB Orders ({orders.length})
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab("catalog")}
+          className={`px-4 py-2 rounded-lg text-xs font-mono transition-colors ${
+            tab === "catalog"
+              ? "bg-[#D9BD81] text-[#090A0A] font-bold"
+              : "bg-[#121315] text-[#F6F4EF]/70 hover:text-[#F6F4EF]"
+          }`}
+        >
+          Canonical 13-Service Ratebook ({catalogList.length})
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab("audit")}
+          className={`px-4 py-2 rounded-lg text-xs font-mono transition-colors ${
+            tab === "audit"
+              ? "bg-[#D9BD81] text-[#090A0A] font-bold"
+              : "bg-[#121315] text-[#F6F4EF]/70 hover:text-[#F6F4EF]"
+          }`}
+        >
+          Audit Log ({auditLogs.length})
+        </button>
       </div>
 
-      {/* MODULE 1: OPERATIONS KANBAN BOARD */}
-      {activeTab === "kanban" && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-base font-bold text-brand-light font-mono uppercase">
-              Production Lifecycle Kanban ({projects.length} Projects)
-            </h2>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3 overflow-x-auto pb-4 cyber-scrollbar">
-            {KANBAN_COLUMNS.map((col) => {
-              const colProjects = projects.filter((p) => p.status === col.id);
-              return (
-                <div
-                  key={col.id}
-                  className="p-3.5 rounded-2xl bg-brand-surface border border-brand-border flex flex-col min-w-[220px] max-h-[600px] overflow-y-auto cyber-scrollbar space-y-3"
-                >
-                  <div className="flex items-center justify-between border-b border-brand-border/60 pb-2">
-                    <span className="text-xs font-mono font-bold text-brand-light">
-                      {col.label}
-                    </span>
-                    <span className="badge-mono text-[10px] text-brand-muted px-1.5 py-0.5 rounded bg-brand-black">
-                      {colProjects.length}
-                    </span>
-                  </div>
-
-                  <div className="space-y-2.5 flex-1">
-                    {colProjects.length === 0 ? (
-                      <span className="text-[11px] font-mono text-brand-muted/60 block text-center py-4">
-                        Empty column
-                      </span>
-                    ) : (
-                      colProjects.map((p) => (
-                        <div
-                          key={p.id}
-                          className="p-3 rounded-xl bg-brand-card border border-brand-border space-y-2 text-xs font-mono"
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-bold text-brand-highlight">
-                              {p.id.slice(0, 10)}
-                            </span>
-                            <span className="text-[10px] text-brand-muted tabular-nums">
-                              Rev: {p.revisions_used ?? p.current_round ?? 0}/{p.max_revisions ?? p.max_rounds ?? 3}
-                            </span>
-                          </div>
-                          <h4 className="font-sans font-semibold text-brand-light text-xs line-clamp-2">
-                            {p.title}
-                          </h4>
-
-                          {/* Quick Stage Controls */}
-                          <div className="flex gap-1 pt-1 border-t border-brand-border/40">
-                            {col.id !== "completed" && (
-                              <button
-                                type="button"
-                                disabled={isPending}
-                                onClick={() => {
-                                  const curIdx = KANBAN_COLUMNS.findIndex((c) => c.id === col.id);
-                                  if (curIdx < KANBAN_COLUMNS.length - 1) {
-                                    handleMoveProject(p.id, KANBAN_COLUMNS[curIdx + 1].id);
-                                  }
-                                }}
-                                className="w-full py-1 text-[10px] font-mono bg-brand-surface hover:bg-brand-highlight hover:text-brand-black hover:font-semibold rounded text-brand-muted border border-brand-border transition-colors"
-                              >
-                                Advance &rarr;
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+      {/* TAB: DEMO DATA Studio Pulse Command Center */}
+      {tab === "studio_pulse_demo" && (
+        <div className="rounded-2xl border border-[#D9BD81]/40 overflow-hidden">
+          <CreativeOfficeOS initialRoute="studio" />
         </div>
       )}
 
-      {/* MODULE 2: CATALOG MANAGER */}
-      {activeTab === "catalog" && (
-        <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <h2 className="text-base font-bold text-brand-light font-mono uppercase">
-              Canonical 60-Service Commercial Catalog
-            </h2>
-            <div className="flex items-center gap-3">
-              <Input
-                type="text"
-                placeholder="Filter services by code, title..."
-                value={catalogSearch}
-                onChange={(e) => setCatalogSearch(e.target.value)}
-                className="bg-brand-surface border-brand-border text-brand-light text-xs font-mono h-9 w-64"
-              />
-              <select
-                value={catalogCategory}
-                onChange={(e) => setCatalogCategory(e.target.value)}
-                className="bg-brand-surface border border-brand-border text-brand-light rounded-lg px-3 py-1.5 text-xs font-mono"
+      {/* TAB: Live DB Projects */}
+      {tab === "projects" && (
+        <div className="rounded-xl border border-[#232528] bg-[#121315] overflow-hidden">
+          {projects.length === 0 ? (
+            <div className="p-10 text-center space-y-3 font-mono text-xs text-[#F6F4EF]/65">
+              <p>
+                0 live projects in database. (Truthful empty state — no
+                fabricated fallback projects).
+              </p>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => setTab("studio_pulse_demo")}
+                className="border-[#D9BD81]/40 text-[#D9BD81] font-mono text-xs"
               >
-                <option value="ALL">All Categories</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    Cat {c.id}: {c.name}
-                  </option>
-                ))}
-              </select>
+                Switch to DEMO DATA &bull; Studio Pulse Command Center
+              </Button>
             </div>
-          </div>
-
-          <div className="border border-brand-border rounded-2xl overflow-hidden glass-panel">
+          ) : (
             <table className="w-full text-left text-xs font-mono">
-              <thead className="bg-brand-surface border-b border-brand-border text-brand-muted uppercase text-[10px]">
+              <thead className="border-b border-[#232528] bg-[#090A0A] text-[#F6F4EF]/65 uppercase text-[10px]">
                 <tr>
-                  <th className="p-3">Code</th>
-                  <th className="p-3">Service Title</th>
-                  <th className="p-3">Base BDT</th>
-                  <th className="p-3">Base USD</th>
-                  <th className="p-3">Turnaround</th>
-                  <th className="p-3">Revisions</th>
-                  <th className="p-3">Pricing Status</th>
-                  <th className="p-3 text-right">Action</th>
+                  <th className="p-4">Project ID</th>
+                  <th className="p-4">Title</th>
+                  <th className="p-4">Revisions</th>
+                  <th className="p-4">Current Status</th>
+                  <th className="p-4">Transition Stage</th>
+                  <th className="p-4 text-right">Workspace</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-brand-border/60">
-                {filteredServices.map((s) => {
+              <tbody className="divide-y divide-[#232528]">
+                {projects.map((p) => (
+                  <tr key={p.id}>
+                    <td className="p-4 font-bold text-[#F6F4EF]">
+                      {p.id.slice(0, 12)}
+                    </td>
+                    <td className="p-4 text-[#F6F4EF]">{p.title}</td>
+                    <td className="p-4 text-[#F6F4EF]/70">
+                      {p.revisions_used} / {p.max_revisions}
+                    </td>
+                    <td className="p-4">
+                      <span className="px-2 py-0.5 rounded uppercase text-[10px] bg-[#D9BD81]/10 text-[#D9BD81] border border-[#D9BD81]/30">
+                        {p.status}
+                      </span>
+                    </td>
+                    <td className="p-4">
+                      <select
+                        value={p.status}
+                        onChange={(e) =>
+                          handleStatusChange(p.id, e.target.value)
+                        }
+                        className="rounded border border-[#232528] bg-[#090A0A] px-2.5 py-1 text-xs text-[#F6F4EF]"
+                      >
+                        {PROJECT_STATUSES.map((st) => (
+                          <option key={st} value={st}>
+                            {st}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="p-4 text-right">
+                      <Link
+                        href={`/dashboard/projects/${p.id}`}
+                        className="text-[#D9BD81] hover:underline"
+                      >
+                        Inspect &rarr;
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+
+      {/* TAB: Live DB Quotes */}
+      {tab === "quotes" && (
+        <div className="space-y-4">
+          {quotes.length === 0 ? (
+            <div className="rounded-xl border border-[#232528] bg-[#121315] p-10 text-center text-xs font-mono text-[#F6F4EF]/65">
+              0 live quotes in database. (Truthful empty state — no fabricated
+              quotes).
+            </div>
+          ) : (
+            quotes.map((q) => {
+              const draft = quoteAmounts[q.id] || {
+                bdt: String(q.amount_bdt || 15000),
+                usd: String(q.amount_usd || 150),
+                notes:
+                  q.admin_notes ||
+                  "Formal hourly scope quotation issued by Studio Operations",
+              };
+              return (
+                <div
+                  key={q.id}
+                  className="rounded-xl border border-[#232528] bg-[#121315] p-6 space-y-4 font-mono text-xs"
+                >
+                  <div className="flex items-center justify-between border-b border-[#232528] pb-3">
+                    <div>
+                      <span className="font-bold text-[#F6F4EF] text-sm">
+                        Quote #{q.id.slice(0, 12)}
+                      </span>
+                      <span className="ml-3 text-[#F6F4EF]/60">
+                        Client: {q.client_id}
+                      </span>
+                    </div>
+                    <span className="px-2.5 py-0.5 rounded uppercase text-[10px] border border-[#D9BD81]/40 text-[#D9BD81]">
+                      {q.status}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
+                    <div>
+                      <label className="text-[10px] uppercase text-[#F6F4EF]/60 block mb-1">
+                        Approved BDT (৳)
+                      </label>
+                      <Input
+                        type="number"
+                        value={draft.bdt}
+                        onChange={(e) =>
+                          setQuoteAmounts({
+                            ...quoteAmounts,
+                            [q.id]: { ...draft, bdt: e.target.value },
+                          })
+                        }
+                        className="bg-[#090A0A] border-[#232528] h-9 text-xs text-[#F6F4EF]"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] uppercase text-[#F6F4EF]/60 block mb-1">
+                        Approved USD ($)
+                      </label>
+                      <Input
+                        type="number"
+                        value={draft.usd}
+                        onChange={(e) =>
+                          setQuoteAmounts({
+                            ...quoteAmounts,
+                            [q.id]: { ...draft, usd: e.target.value },
+                          })
+                        }
+                        className="bg-[#090A0A] border-[#232528] h-9 text-xs text-[#F6F4EF]"
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      onClick={() => handleIssueQuote(q.id)}
+                      className="bg-[#D9BD81] hover:bg-[#D9BD81]/90 text-[#090A0A] font-semibold text-xs h-9"
+                    >
+                      Issue Formal Quotation &rarr;
+                    </Button>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      )}
+
+      {/* TAB: Live DB Orders */}
+      {tab === "orders" && (
+        <div className="rounded-xl border border-[#232528] bg-[#121315] overflow-hidden">
+          {orders.length === 0 ? (
+            <div className="p-10 text-center text-xs font-mono text-[#F6F4EF]/65">
+              0 live payment orders in database. (Truthful empty state — fake
+              paid fallback orders removed per Gate 0 audit).
+            </div>
+          ) : (
+            <table className="w-full text-left text-xs font-mono">
+              <thead className="border-b border-[#232528] bg-[#090A0A] text-[#F6F4EF]/65 uppercase text-[10px]">
+                <tr>
+                  <th className="p-4">Order ID</th>
+                  <th className="p-4">Status</th>
+                  <th className="p-4">Gateway</th>
+                  <th className="p-4">Amount (BDT / USD)</th>
+                  <th className="p-4">Created</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#232528]">
+                {orders.map((ord) => (
+                  <tr key={ord.id}>
+                    <td className="p-4 font-bold text-[#F6F4EF]">
+                      {ord.id.slice(0, 12)}
+                    </td>
+                    <td className="p-4">
+                      <span className="px-2 py-0.5 rounded uppercase text-[10px] border border-[#D9BD81]/30 text-[#D9BD81]">
+                        {ord.status}
+                      </span>
+                    </td>
+                    <td className="p-4 uppercase text-[#F6F4EF]/70">
+                      {ord.payment_gateway || "N/A"}
+                    </td>
+                    <td className="p-4 font-bold text-[#F6F4EF]">
+                      ৳{Number(ord.total_bdt).toLocaleString()} / $
+                      {Number(ord.total_usd).toLocaleString()}
+                    </td>
+                    <td className="p-4 text-[#F6F4EF]/60">
+                      {new Date(ord.created_at).toLocaleDateString()}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+
+      {/* TAB: Canonical 13-Service Ratebook */}
+      {tab === "catalog" && (
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <p className="text-xs text-[#F6F4EF]/70 font-mono">
+              Canonical 13-Service Hourly Ratebook (4 Disciplines &bull; 2
+              Consolidated Revisions)
+            </p>
+            <Input
+              type="search"
+              placeholder="Filter 13 services by ID or title..."
+              value={catalogSearch}
+              onChange={(e) => setCatalogSearch(e.target.value)}
+              className="w-full sm:w-72 bg-[#121315] border-[#232528] h-9 text-xs font-mono text-[#F6F4EF]"
+            />
+          </div>
+
+          <div className="rounded-xl border border-[#232528] bg-[#121315] overflow-hidden">
+            <table className="w-full text-left text-xs font-mono">
+              <thead className="border-b border-[#232528] bg-[#090A0A] text-[#F6F4EF]/65 uppercase text-[10px]">
+                <tr>
+                  <th className="p-3.5">Code</th>
+                  <th className="p-3.5">Discipline</th>
+                  <th className="p-3.5">Title</th>
+                  <th className="p-3.5">Base Hours</th>
+                  <th className="p-3.5">Base BDT</th>
+                  <th className="p-3.5">Base USD</th>
+                  <th className="p-3.5 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#232528]">
+                {filteredCatalog.map((s) => {
                   const isEditing = editingServiceId === s.id;
-                  const isQuoteReq = s.pricing_status === "quote_required";
                   return (
-                    <tr key={s.id} className="hover:bg-brand-surface/40">
-                      <td className="p-3 font-bold text-brand-highlight">{s.id}</td>
-                      <td className="p-3 font-sans font-medium text-brand-light max-w-xs truncate">
-                        {s.title}
+                    <tr key={s.id}>
+                      <td className="p-3.5 font-bold text-[#D9BD81]">{s.id}</td>
+                      <td className="p-3.5 text-[#F6F4EF]/70">
+                        {s.category_id}
                       </td>
-                      <td className="p-3">
+                      <td className="p-3.5 text-[#F6F4EF]">{s.title}</td>
+                      <td className="p-3.5 text-[#D9BD81]">
+                        {s.estimated_hours || 4}h
+                      </td>
+                      <td className="p-3.5 text-[#F6F4EF]">
                         {isEditing ? (
-                          <input
+                          <Input
                             type="number"
-                            value={editPriceBdt}
-                            onChange={(e) => setEditPriceBdt(Number(e.target.value))}
-                            className="w-24 bg-brand-surface border border-brand-border rounded px-2 py-1 text-xs font-mono text-brand-light"
+                            value={editServiceValues.bdt}
+                            onChange={(e) =>
+                              setEditServiceValues({
+                                ...editServiceValues,
+                                bdt: e.target.value,
+                              })
+                            }
+                            className="h-7 w-24 bg-[#090A0A] border-[#232528] text-xs"
                           />
                         ) : (
-                          <span className="font-bold text-brand-light">
-                            ৳ {Number(s.base_bdt).toLocaleString()}
-                          </span>
+                          `৳${s.base_bdt.toLocaleString()}`
                         )}
                       </td>
-                      <td className="p-3">
+                      <td className="p-3.5 text-[#F6F4EF]">
                         {isEditing ? (
-                          <input
+                          <Input
                             type="number"
-                            value={editPriceUsd}
-                            onChange={(e) => setEditPriceUsd(Number(e.target.value))}
-                            className="w-20 bg-brand-surface border border-brand-border rounded px-2 py-1 text-xs font-mono text-brand-light"
+                            value={editServiceValues.usd}
+                            onChange={(e) =>
+                              setEditServiceValues({
+                                ...editServiceValues,
+                                usd: e.target.value,
+                              })
+                            }
+                            className="h-7 w-20 bg-[#090A0A] border-[#232528] text-xs"
                           />
                         ) : (
-                          <span className="text-brand-muted">${Number(s.base_usd)}</span>
+                          `$${s.base_usd.toLocaleString()}`
                         )}
                       </td>
-                      <td className="p-3 text-brand-light">{s.days}d</td>
-                      <td className="p-3 text-brand-light">{s.revisions}</td>
-                      <td className="p-3">
-                        <button
-                          type="button"
-                          onClick={() => handleTogglePricingStatus(s)}
-                          className={`px-2 py-0.5 rounded text-[10px] font-mono border transition-all ${
-                            isQuoteReq
-                              ? "border-amber-500/40 text-amber-400 bg-amber-500/10 hover:bg-amber-500/20"
-                              : "border-emerald-500/40 text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20"
-                          }`}
-                        >
-                          {s.pricing_status}
-                        </button>
-                      </td>
-                      <td className="p-3 text-right">
+                      <td className="p-3.5 text-right">
                         {isEditing ? (
                           <div className="flex items-center justify-end gap-1.5">
                             <Button
+                              type="button"
                               size="sm"
-                              onClick={() => handleSaveServicePricing(s.id)}
-                              className="text-[10px] h-6 px-2 bg-brand-highlight text-brand-black font-semibold"
+                              onClick={() => saveEditService(s.id)}
+                              className="h-7 px-2.5 text-[10px] bg-emerald-600 text-white"
                             >
                               Save
                             </Button>
                             <Button
+                              type="button"
                               size="sm"
                               variant="ghost"
                               onClick={() => setEditingServiceId(null)}
-                              className="text-[10px] h-6 px-2 text-brand-muted"
+                              className="h-7 px-2 text-[10px]"
                             >
-                              ✕
+                              Cancel
                             </Button>
                           </div>
                         ) : (
                           <Button
+                            type="button"
                             size="sm"
                             variant="outline"
-                            onClick={() => {
-                              setEditingServiceId(s.id);
-                              setEditPriceBdt(Number(s.base_bdt));
-                              setEditPriceUsd(Number(s.base_usd));
-                            }}
-                            className="text-[10px] h-6 px-2 border-brand-border"
+                            onClick={() => startEditService(s)}
+                            className="h-7 px-2.5 text-[10px] border-[#232528] text-[#F6F4EF]"
                           >
-                            Edit
+                            Edit Rate
                           </Button>
                         )}
                       </td>
@@ -497,240 +618,39 @@ export function AdminConsoleClient({
         </div>
       )}
 
-      {/* MODULE 3: QUOTE DESK */}
-      {activeTab === "quotes" && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-base font-bold text-brand-light font-mono uppercase">
-              Quotation Desk ({quotes.length} Requests)
-            </h2>
-          </div>
-
-          {quotes.length === 0 ? (
-            <div className="glass-panel p-8 text-center rounded-2xl border border-brand-border font-mono text-xs text-brand-muted">
-              No formal quotation requests pending review.
+      {/* TAB: Audit Log */}
+      {tab === "audit" && (
+        <div className="rounded-xl border border-[#232528] bg-[#121315] overflow-hidden">
+          {auditLogs.length === 0 ? (
+            <div className="p-10 text-center text-xs font-mono text-[#F6F4EF]/60">
+              No live database audit events logged yet.
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {quotes.map((q) => (
-                <div
-                  key={q.id}
-                  className="glass-card p-5 rounded-2xl border border-brand-border space-y-4 font-mono text-xs"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="badge-mono text-brand-highlight font-bold text-sm">
-                      {q.quote_ref || q.id}
-                    </span>
-                    <Badge variant="outline" className="text-[10px] uppercase border-amber-500/40 text-amber-400">
-                      {q.status}
-                    </Badge>
-                  </div>
-
-                  <div className="space-y-1">
-                    <span className="text-[10px] text-brand-muted uppercase">Client / Request Scope:</span>
-                    <p className="text-brand-light font-sans text-xs">
-                      {q.notes || q.scope_summary || "Standard 7-Step Package Builder configuration"}
-                    </p>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3 pt-2 border-t border-brand-border/60">
-                    <div>
-                      <span className="text-[10px] text-brand-muted uppercase block">Amount (BDT):</span>
-                      <span className="font-bold text-brand-light text-sm tabular-nums">
-                        ৳ {Number(q.amount_bdt ?? q.total_amount ?? 0).toLocaleString()}
+            <table className="w-full text-left text-xs font-mono">
+              <thead className="border-b border-[#232528] bg-[#090A0A] text-[#F6F4EF]/65 uppercase text-[10px]">
+                <tr>
+                  <th className="p-4">Timestamp</th>
+                  <th className="p-4">Event Type</th>
+                  <th className="p-4">Details</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#232528]">
+                {auditLogs.map((log) => (
+                  <tr key={log.id}>
+                    <td className="p-4 text-[#F6F4EF]/60 whitespace-nowrap">
+                      {new Date(log.created_at).toLocaleString()}
+                    </td>
+                    <td className="p-4">
+                      <span className="px-2 py-0.5 rounded bg-[#D9BD81]/10 text-[#D9BD81] border border-[#D9BD81]/30 text-[10px]">
+                        {log.event_type}
                       </span>
-                    </div>
-                    <div>
-                      <span className="text-[10px] text-brand-muted uppercase block">Amount (USD):</span>
-                      <span className="font-bold text-brand-light text-sm tabular-nums">
-                        ${Number(q.amount_usd ?? (q.currency === "USD" ? q.total_amount : 0) ?? 0).toLocaleString()}
-                      </span>
-                    </div>
-                  </div>
-
-                  {q.status !== "issued" && (
-                    <div className="pt-2">
-                      {selectedQuoteId === q.id ? (
-                        <div className="p-3 rounded-xl bg-brand-surface border border-brand-border space-y-3">
-                          <span className="font-bold text-brand-light text-[11px] uppercase block">
-                            Configure Approved Commercial Quotation
-                          </span>
-                          <div className="grid grid-cols-2 gap-2">
-                            <div>
-                              <label className="text-[10px] text-brand-muted">Approved BDT:</label>
-                              <Input
-                                type="number"
-                                value={quoteBdt}
-                                onChange={(e) => setQuoteBdt(Number(e.target.value))}
-                                className="bg-brand-black border-brand-border text-brand-light h-8 text-xs font-mono"
-                              />
-                            </div>
-                            <div>
-                              <label className="text-[10px] text-brand-muted">Approved USD:</label>
-                              <Input
-                                type="number"
-                                value={quoteUsd}
-                                onChange={(e) => setQuoteUsd(Number(e.target.value))}
-                                className="bg-brand-black border-brand-border text-brand-light h-8 text-xs font-mono"
-                              />
-                            </div>
-                          </div>
-                          <Input
-                            placeholder="Optional operational or licensing notes..."
-                            value={quoteNotes}
-                            onChange={(e) => setQuoteNotes(e.target.value)}
-                            className="bg-brand-black border-brand-border text-brand-light h-8 text-xs font-mono"
-                          />
-                          <div className="flex gap-2">
-                            <Button
-                              size="sm"
-                              onClick={() => handleIssueQuote(q.id)}
-                              disabled={isPending}
-                              className="cyber-glow bg-brand-highlight hover:bg-brand-highlight/90 text-brand-black font-semibold font-mono text-xs w-full"
-                            >
-                              Issue Approved Quote
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => setSelectedQuoteId(null)}
-                              className="font-mono text-xs border-brand-border"
-                            >
-                              Cancel
-                            </Button>
-                          </div>
-                        </div>
-                      ) : (
-                        <Button
-                          size="sm"
-                          onClick={() => {
-                            setSelectedQuoteId(q.id);
-                            setQuoteBdt(Number(q.amount_bdt ?? q.total_amount ?? 0));
-                            setQuoteUsd(Number(q.amount_usd ?? (q.currency === "USD" ? q.total_amount : 0) ?? 0));
-                          }}
-                          className="w-full cyber-glow bg-brand-highlight hover:bg-brand-highlight/90 text-brand-black font-semibold font-mono text-xs"
-                        >
-                          Review &amp; Issue Quote
-                        </Button>
-                      )}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
+                    </td>
+                    <td className="p-4 text-[#F6F4EF]">{log.details}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           )}
-        </div>
-      )}
-
-      {/* MODULE 4: ORDERS & TRANSACTIONS */}
-      {activeTab === "orders" && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-base font-bold text-brand-light font-mono uppercase">
-              Settled Orders & Transactions ({initialOrders.length})
-            </h2>
-          </div>
-
-          <div className="border border-brand-border rounded-2xl overflow-hidden glass-panel">
-            <table className="w-full text-left text-xs font-mono">
-              <thead className="bg-brand-surface border-b border-brand-border text-brand-muted uppercase text-[10px]">
-                <tr>
-                  <th className="p-3.5">Order Ref</th>
-                  <th className="p-3.5">Payment Status</th>
-                  <th className="p-3.5">Project Status</th>
-                  <th className="p-3.5">Amount BDT</th>
-                  <th className="p-3.5">Amount USD</th>
-                  <th className="p-3.5">Settlement Date</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-brand-border/60">
-                {initialOrders.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="p-6 text-center text-brand-muted font-mono">
-                      No order records found in database.
-                    </td>
-                  </tr>
-                ) : (
-                  initialOrders.map((ord) => (
-                    <tr key={ord.id} className="hover:bg-brand-surface/40">
-                      <td className="p-3.5 font-bold text-brand-highlight">
-                        {ord.order_ref || ord.order_number || ord.id}
-                      </td>
-                      <td className="p-3.5">
-                        <Badge variant="outline" className="text-[10px] uppercase border-emerald-500/40 text-emerald-400 bg-emerald-500/10">
-                          {ord.payment_status}
-                        </Badge>
-                      </td>
-                      <td className="p-3.5 uppercase text-brand-light">
-                        {(ord.project_status || "in_production").replace(/_/g, " ")}
-                      </td>
-                      <td className="p-3.5 text-brand-light font-bold tabular-nums">
-                        ৳ {Number(ord.amount_bdt ?? ord.total_amount ?? 0).toLocaleString()}
-                      </td>
-                      <td className="p-3.5 text-brand-muted tabular-nums">
-                        ${Number(ord.amount_usd ?? (ord.currency === "USD" ? ord.total_amount : 0) ?? 0).toLocaleString()}
-                      </td>
-                      <td className="p-3.5 text-brand-muted tabular-nums">
-                        {new Date(ord.created_at).toLocaleDateString()}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* MODULE 5: AUDIT LOG INSPECTOR */}
-      {activeTab === "audit" && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-base font-bold text-brand-light font-mono uppercase">
-              System Audit Event Trail ({initialAuditLogs.length} Events)
-            </h2>
-          </div>
-
-          <div className="border border-brand-border rounded-2xl overflow-hidden glass-panel">
-            <table className="w-full text-left text-xs font-mono">
-              <thead className="bg-brand-surface border-b border-brand-border text-brand-muted uppercase text-[10px]">
-                <tr>
-                  <th className="p-3.5">Timestamp</th>
-                  <th className="p-3.5">Event Type</th>
-                  <th className="p-3.5">Event Details</th>
-                  <th className="p-3.5">Actor</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-brand-border/60">
-                {initialAuditLogs.length === 0 ? (
-                  <tr>
-                    <td colSpan={4} className="p-6 text-center text-brand-muted font-mono">
-                      No audit events recorded yet.
-                    </td>
-                  </tr>
-                ) : (
-                  initialAuditLogs.map((log) => (
-                    <tr key={log.id} className="hover:bg-brand-surface/40">
-                      <td className="p-3.5 text-brand-muted text-[11px] whitespace-nowrap tabular-nums">
-                        {new Date(log.created_at).toLocaleString()}
-                      </td>
-                      <td className="p-3.5 font-bold text-brand-highlight">
-                        {log.event_type || log.action || "SYSTEM_EVENT"}
-                      </td>
-                      <td className="p-3.5 text-brand-light font-sans text-xs">
-                        {typeof log.details === "object"
-                          ? JSON.stringify(log.details)
-                          : String(log.details || "")}
-                      </td>
-                      <td className="p-3.5 text-brand-muted text-[10px]">
-                        {log.actor_email || (log.actor_id ? `${log.actor_id.slice(0, 8)}...` : "SYSTEM")}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
         </div>
       )}
     </div>

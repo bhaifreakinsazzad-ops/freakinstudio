@@ -4,167 +4,69 @@ import { Navbar } from "@/components/layout/navbar";
 import { Footer } from "@/components/layout/footer";
 import { Button } from "@/components/ui/button";
 import { ShowcaseImage } from "@/components/ui/ShowcaseImage";
+import { CANONICAL_CONCEPT_WORKS } from "@/lib/catalog";
 
 export const metadata: Metadata = {
-  title: "Case Studies — Freakin's Studio",
+  title: "Technical Concept Studies — Freakin's Studio",
   description:
-    "In-depth creative and commercial case studies detailing strategy, production milestones, and measurable market outcomes.",
+    "In-depth technical design studies examining typography, vector construction, pre-press color separation, and kinetic motion systems.",
 };
 
 export const instant = false;
-
-interface CaseStudy {
-  slug: string;
-  client: string;
-  industry: string;
-  timeline: string;
-  servicesUsed: { id: string; label: string }[];
-  headline: string;
-  summary: string;
-  challenge: string;
-  solution: string;
-  results: { label: string; value: string }[];
-  testimonial: {
-    quote: string;
-    author: string;
-    role: string;
-  };
-  imageUrl: string;
-  primaryServiceId: string;
-}
-
-const CASE_STUDIES: CaseStudy[] = [
-  {
-    slug: "aurum-robotics",
-    client: "Aurum Robotics Corp",
-    industry: "Industrial Robotics & Automation",
-    timeline: "12 Days (Rush Protocol)",
-    servicesUsed: [
-      { id: "B02", label: "B02 · Complete Brand Identity Development" },
-      { id: "G03", label: "G03 · Business Pitch Decks" },
-      { id: "A05", label: "A05 · Business Cards & Stationery" },
-    ],
-    headline: "Architecting a Series-A Industrial Identity & Investor Suite",
-    summary:
-      "How Freakin's Studio unified complex robotic hardware engineering with a geometric visual identity that backed an $18.5M institutional round.",
-    challenge:
-      "Aurum Robotics was preparing to close Series-A capital while unveiling its autonomous warehouse fleet. Their existing branding relied on fragmented templates that failed to communicate engineering rigor.",
-    solution:
-      "We ran a synchronized Brand Identity sprint (B02) alongside an executive Business Pitch Deck (G03) and tactile stationery suite (A05). We built a mathematical monogram system, obsidian-and-gold typography guidelines, and 24 high-impact investor slides.",
-    results: [
-      { label: "Series-A Closed", value: "$18.5M" },
-      { label: "Turnaround Time", value: "12 Days" },
-      { label: "Deck Slides", value: "24 Slides" },
-    ],
-    testimonial: {
-      quote:
-        "Freakin's Studio didn't just refresh our logo—they engineered a complete visual identity and investor narrative that gave our partners immediate conviction.",
-      author: "Dr. Marcus Vance",
-      role: "CEO & Founder, Aurum Robotics",
-    },
-    imageUrl: "/images/portfolio/brand-identity.jpg",
-    primaryServiceId: "B02",
-  },
-  {
-    slug: "kinetic-motion-aura",
-    client: "Kinetic Interactive Labs",
-    industry: "Consumer Tech & Entertainment",
-    timeline: "14 Days",
-    servicesUsed: [
-      { id: "C05", label: "C05 · 3D Animation & Visuals" },
-      { id: "C03", label: "C03 · Motion Graphics & Animated Typography" },
-      { id: "C07", label: "C07 · Product & Commercial Videos" },
-    ],
-    headline: "Producing a 4K 3D Kinetic Launch Film & Social Motion Engine",
-    summary:
-      "Delivering cinema-grade 3D animated typography, broadcast grading, and vertical social cutdowns for a synchronized global product reveal.",
-    challenge:
-      "Kinetic needed a flagship launch trailer and 12 platform-specific reels within a tight two-week window prior to their international keynote, without hiring separate 3D and post-production houses.",
-    solution:
-      "Our video and motion division combined 3D Animation & Visuals (C05) with Motion Graphics & Animated Typography (C03) and Commercial Video mastery (C07) inside a unified proofing room with coordinate pin reviews.",
-    results: [
-      { label: "Launch Views", value: "1.4M+" },
-      { label: "Reels Delivered", value: "12 Cuts" },
-      { label: "Revision Rounds", value: "2 / 4 Used" },
-    ],
-    testimonial: {
-      quote:
-        "Pin-point coordinate proofing cut our review cycle in half. Every 4K master and 9:16 social cutdown arrived calibrated and ready for global ad spend.",
-      author: "Elena Rostova",
-      role: "Chief Brand Officer, Kinetic Labs",
-    },
-    imageUrl: "/images/portfolio/video-motion.jpg",
-    primaryServiceId: "C05",
-  },
-  {
-    slug: "aetheria-spatial",
-    client: "Aetheria Audio Systems",
-    industry: "Consumer Hardware & Luxury Electronics",
-    timeline: "10 Days",
-    servicesUsed: [
-      { id: "F02", label: "F02 · AI-Assisted Video Production" },
-      { id: "F05", label: "F05 · Digital Mockups & Product Visuals" },
-      { id: "E01", label: "E01 · Paid Advertising Creative Design" },
-    ],
-    headline: "AI-Assisted Hardware Visualization & Omnichannel Launch Campaign",
-    summary:
-      "Pairing generative 8K staging with human art direction and paid social ad creatives to drive 2,400 hardware pre-orders in 48 hours.",
-    challenge:
-      "With physical manufacturing prototypes still in transit, Aetheria needed photorealistic product staging, launch teasers, and paid acquisition creatives for Meta and Google Display ahead of schedule.",
-    solution:
-      "We deployed AI-Assisted Video Production (F02) and Digital Product Mockups (F05), refined by senior retouchers, and exported a 16-asset Paid Advertising Creative suite (E01) with verified ROAS hooks.",
-    results: [
-      { label: "48h Pre-Orders", value: "2,400" },
-      { label: "Ad ROAS Uplift", value: "+42%" },
-      { label: "Master Assets", value: "36 Files" },
-    ],
-    testimonial: {
-      quote:
-        "Having product visuals, launch video, and paid social creatives built under one roof saved us six weeks of studio logistics and directly fueled our sellout launch.",
-      author: "Julian Thorne",
-      role: "Head of Hardware, Aetheria Systems",
-    },
-    imageUrl: "/images/portfolio/ai-creative.jpg",
-    primaryServiceId: "F02",
-  },
-];
 
 export default function CaseStudiesPage() {
   return (
     <>
       <Navbar />
-      <main className="flex-1 py-16 px-4 sm:px-6">
+      <main className="flex-1 py-16 px-4 sm:px-6 bg-[#090A0A]">
         <div className="mx-auto max-w-7xl space-y-16">
           {/* Header */}
           <div className="space-y-4 max-w-3xl">
-            <span className="badge-mono text-brand-highlight">In-Depth Case Studies</span>
-            <h1 className="text-4xl sm:text-6xl font-bold tracking-tight text-brand-light text-balance">
-              Results Measured in Real Commercial Value.
+            <span className="badge-mono rounded border border-[#D9BD81]/40 bg-[#D9BD81]/10 px-2.5 py-1 text-[#D9BD81]">
+              Concept Work — Not Client Work
+            </span>
+            <h1 className="text-4xl sm:text-6xl font-bold tracking-tight text-[#F6F4EF] text-balance">
+              Technical Production Breakdowns.
             </h1>
-            <p className="text-base sm:text-lg text-brand-muted leading-relaxed">
-              Discover how visionary founders, enterprise brands, and growth teams deploy Freakin&apos;s Studio
-              across our 60 canonical services to achieve decisive market results.
+            <p className="text-base sm:text-lg text-[#F6F4EF]/70 leading-relaxed">
+              Explore how Freakin&apos;s Studio structures design systems,
+              pre-press packaging dielines, and short-form motion sequences
+              across our 13 canonical services. All studies are internal studio
+              specimens with zero fabricated client testimonials or inflated
+              vanity metrics.
             </p>
           </div>
 
-          {/* Case Studies Detailed List */}
-          <div className="space-y-16">
-            {CASE_STUDIES.map((study, idx) => (
+          {/* Concept Studies List */}
+          <div className="space-y-12">
+            {CANONICAL_CONCEPT_WORKS.map((study, idx) => (
               <article
-                key={study.slug}
-                className="rounded-2xl border border-brand-border bg-brand-surface/30 p-6 sm:p-10 space-y-8"
+                key={study.id}
+                className="rounded-2xl border border-[#232528] bg-[#121315] p-6 sm:p-10 space-y-8"
               >
                 {/* Meta Bar */}
-                <div className="flex flex-wrap items-center justify-between gap-4 border-b border-brand-border/60 pb-5 text-xs font-mono">
+                <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#232528] pb-5 text-xs font-mono">
                   <div className="flex flex-wrap items-center gap-3">
-                    <span className="text-brand-light font-bold">Case Study 0{idx + 1}</span>
-                    <span className="text-brand-border">&bull;</span>
-                    <span className="text-brand-highlight">{study.client}</span>
-                    <span className="text-brand-border">&bull;</span>
-                    <span className="text-brand-muted">{study.industry}</span>
+                    <span className="text-[#F6F4EF] font-bold">
+                      Specimen 0{idx + 1} ({study.id})
+                    </span>
+                    <span className="text-[#232528]">&bull;</span>
+                    <span className="rounded border border-[#D9BD81]/40 bg-[#D9BD81]/10 px-2 py-0.5 text-[#D9BD81]">
+                      Concept Work — Not Client Work
+                    </span>
+                    <span className="text-[#232528]">&bull;</span>
+                    <span className="text-[#F6F4EF]/65">
+                      {study.categoryLabel}
+                    </span>
                   </div>
-                  <div className="text-brand-muted">
-                    Timeline: <span className="text-brand-light font-semibold">{study.timeline}</span>
+                  <div className="text-[#F6F4EF]/70">
+                    Canonical Service:{" "}
+                    <Link
+                      href={`/services/${study.serviceId}`}
+                      className="text-[#D9BD81] font-semibold hover:underline"
+                    >
+                      {study.serviceId}
+                    </Link>
                   </div>
                 </div>
 
@@ -172,95 +74,71 @@ export default function CaseStudiesPage() {
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
                   <div className="lg:col-span-7 flex flex-col justify-between space-y-6">
                     <div className="space-y-5">
-                      <h2 className="text-2xl sm:text-3xl font-bold text-brand-light leading-snug">
-                        {study.headline}
+                      <h2 className="text-2xl sm:text-3xl font-bold text-[#F6F4EF] leading-snug">
+                        {study.title}
                       </h2>
-                      <p className="text-sm font-medium text-brand-muted leading-relaxed">
-                        {study.summary}
+                      <p className="text-sm font-medium text-[#F6F4EF]/75 leading-relaxed">
+                        {study.visualTheme}
                       </p>
 
-                      <div className="space-y-4 pt-2 text-xs leading-relaxed text-brand-muted">
-                        <div>
-                          <h3 className="font-mono uppercase font-semibold text-brand-light text-xs mb-1">
-                            The Challenge
+                      <div className="space-y-4 pt-2 text-xs leading-relaxed text-[#F6F4EF]/70">
+                        <div className="rounded-xl border border-[#232528] bg-[#090A0A]/60 p-4">
+                          <h3 className="font-mono uppercase font-semibold text-[#D9BD81] text-xs mb-1.5">
+                            Production Architecture &amp; Truth Policy
                           </h3>
-                          <p>{study.challenge}</p>
-                        </div>
-                        <div>
-                          <h3 className="font-mono uppercase font-semibold text-brand-light text-xs mb-1">
-                            The Studio Solution
-                          </h3>
-                          <p>{study.solution}</p>
+                          <p>{study.rationale}</p>
                         </div>
                       </div>
 
-                      {/* Canonical services used */}
-                      <div className="space-y-2 pt-2">
-                        <h4 className="font-mono uppercase text-[10px] text-brand-muted">
-                          Canonical Services Deployed
-                        </h4>
-                        <div className="flex flex-wrap gap-3 text-xs font-mono">
-                          {study.servicesUsed.map((srv) => (
-                            <Link
-                              key={srv.id}
-                              href={`/services/${srv.id}`}
-                              className="text-brand-highlight hover:underline"
-                            >
-                              {srv.label}
-                            </Link>
-                          ))}
+                      {/* Deliverables & Formats */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                        <div className="rounded-xl border border-[#232528] bg-[#090A0A]/40 p-4 space-y-1.5">
+                          <h4 className="font-mono uppercase text-[10px] text-[#F6F4EF]/50">
+                            Included Specimen Deliverables
+                          </h4>
+                          <ul className="space-y-1 text-xs font-mono text-[#F6F4EF]/90">
+                            {study.deliverables.map((d) => (
+                              <li key={d}>&bull; {d}</li>
+                            ))}
+                          </ul>
+                        </div>
+                        <div className="rounded-xl border border-[#232528] bg-[#090A0A]/40 p-4 space-y-1.5">
+                          <h4 className="font-mono uppercase text-[10px] text-[#F6F4EF]/50">
+                            Handover Formats &amp; Governance
+                          </h4>
+                          <p className="text-xs font-mono text-[#D9BD81]">
+                            {study.formats.join(" · ")}
+                          </p>
+                          <p className="text-[11px] text-[#F6F4EF]/60 pt-1">
+                            2 Consolidated Revision Rounds &bull; Human Art
+                            Direction Sign-Off
+                          </p>
                         </div>
                       </div>
                     </div>
-
-                    {/* Testimonial Quote — hairline border all around, no thick left bar */}
-                    <blockquote className="rounded-xl border border-brand-border bg-brand-surface/70 p-5 space-y-2 text-xs">
-                      <p className="italic text-brand-light leading-relaxed">
-                        &ldquo;{study.testimonial.quote}&rdquo;
-                      </p>
-                      <footer className="font-mono text-[11px] text-brand-muted">
-                        &mdash; <strong className="text-brand-light">{study.testimonial.author}</strong>, {study.testimonial.role}
-                      </footer>
-                    </blockquote>
                   </div>
 
-                  {/* Sidebar with Image & Metrics */}
+                  {/* Sidebar with Image & CTA */}
                   <div className="lg:col-span-5 flex flex-col justify-between space-y-6">
-                    <div className="relative h-64 sm:h-80 w-full overflow-hidden rounded-xl border border-brand-border bg-brand-surface">
-                      <ShowcaseImage
-                        src={study.imageUrl}
-                        alt={study.headline}
-                        caption={study.client}
-                        className="object-cover"
-                      />
+                    <div className="relative h-64 sm:h-72 w-full overflow-hidden rounded-xl border border-[#232528] bg-[#232528]">
+                      {study.imageUrl && (
+                        <ShowcaseImage
+                          src={study.imageUrl}
+                          alt={study.title}
+                          caption={`${study.title} (Concept Work)`}
+                          className="object-cover"
+                        />
+                      )}
                     </div>
 
-                    <div className="space-y-4">
-                      <div className="grid grid-cols-3 gap-3 tabular-nums">
-                        {study.results.map((res, rIdx) => (
-                          <div
-                            key={rIdx}
-                            className="rounded-lg border border-brand-border bg-brand-surface/60 p-3 text-center space-y-1"
-                          >
-                            <div className="font-mono text-lg font-bold text-brand-highlight">
-                              {res.value}
-                            </div>
-                            <div className="text-[10px] font-mono text-brand-muted uppercase leading-tight">
-                              {res.label}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-
-                      <Button
-                        render={
-                          <Link href={`/builder?service=${study.primaryServiceId}`}>
-                            Configure Similar Scope ({study.primaryServiceId}) &rarr;
-                          </Link>
-                        }
-                        className="w-full cyber-glow bg-brand-highlight hover:bg-brand-highlight/90 text-brand-black font-semibold text-xs font-mono h-10"
-                      />
-                    </div>
+                    <Button
+                      render={
+                        <Link href={`/builder?service=${study.serviceId}`}>
+                          Configure {study.serviceId} Scope in Smart Brief &rarr;
+                        </Link>
+                      }
+                      className="w-full cyber-glow bg-[#D9BD81] hover:bg-[#D9BD81]/90 text-[#090A0A] font-semibold text-xs font-mono h-11"
+                    />
                   </div>
                 </div>
               </article>
@@ -268,24 +146,25 @@ export default function CaseStudiesPage() {
           </div>
 
           {/* Direct CTA */}
-          <div className="rounded-2xl border border-brand-border bg-brand-surface/40 p-8 sm:p-12 text-center space-y-4">
-            <h2 className="text-2xl sm:text-4xl font-bold text-brand-light text-balance">
-              Start your next production chapter with Freakin&apos;s Studio.
+          <div className="rounded-2xl border border-[#232528] bg-[#121315] p-8 sm:p-12 text-center space-y-4">
+            <h2 className="text-2xl sm:text-4xl font-bold text-[#F6F4EF] text-balance">
+              Start Your Next Production Chapter with Freakin&apos;s Studio.
             </h2>
-            <p className="text-sm text-brand-muted max-w-xl mx-auto">
-              Choose from 60 precision creative services, tailor your scope, and get started today.
+            <p className="text-sm text-[#F6F4EF]/70 max-w-xl mx-auto">
+              Choose from 13 canonical creative services across 4 disciplines,
+              tailor your variants and add-ons, and submit a Smart Brief today.
             </p>
             <div className="pt-2 flex flex-wrap justify-center gap-4">
               <Button
-                render={<Link href="/builder">Launch Package Builder</Link>}
+                render={<Link href="/builder">Launch Smart Brief Builder</Link>}
                 size="lg"
-                className="cyber-glow bg-brand-highlight hover:bg-brand-highlight/90 text-brand-black font-semibold font-mono text-sm"
+                className="cyber-glow bg-[#D9BD81] hover:bg-[#D9BD81]/90 text-[#090A0A] font-semibold font-mono text-sm"
               />
               <Button
-                render={<Link href="/services">Browse 60 Services</Link>}
+                render={<Link href="/services">Browse 13 Core Services</Link>}
                 size="lg"
                 variant="outline"
-                className="font-mono text-sm border-brand-border text-brand-light"
+                className="font-mono text-sm border-[#232528] text-[#F6F4EF]"
               />
             </div>
           </div>

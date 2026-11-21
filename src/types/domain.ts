@@ -1,10 +1,12 @@
+import type { Database } from "./database.types";
+
 export const USER_ROLES = [
   "customer",
   "customer_org_admin",
   "customer_team_member",
-  "sales_rep",
   "designer",
   "video_editor",
+  "sales_rep",
   "project_manager",
   "finance_manager",
   "studio_admin",
@@ -13,272 +15,243 @@ export const USER_ROLES = [
 
 export type UserRole = (typeof USER_ROLES)[number];
 
-export const ADMIN_ROLES: readonly UserRole[] = ["studio_admin", "super_admin"];
-
-export interface Profile {
-  id: string;
-  email: string;
-  full_name: string | null;
-  role: UserRole;
-  organization_id: string | null;
-  avatar_url: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface Organization {
-  id: string;
-  name: string;
-  slug: string;
-  created_by: string;
-  created_at: string;
-  updated_at: string;
-}
+export const ADMIN_ROLES: readonly UserRole[] = [
+  "studio_admin",
+  "super_admin",
+] as const;
 
 export type PricingStatus = "approved" | "quote_required";
 
-export interface ServiceCategory {
-  id: string;
-  name: string;
-  name_bn: string | null;
-  sort_order: number;
-}
+export type Currency = "BDT" | "USD";
 
-export interface Service {
+export type ProjectStatus =
+  | "draft"
+  | "pending_payment"
+  | "onboarding"
+  | "brief_submitted"
+  | "in_production"
+  | "internal_qa"
+  | "client_review"
+  | "revision_requested"
+  | "client_approved"
+  | "delivered"
+  | "archived"
+  | "cancelled"
+  | "disputed"
+  // v2 Creative Office OS canonical lifecycle stages
+  | "request_submitted"
+  | "quote_issued"
+  | "accepted"
+  | "assigned"
+  | "proof_ready"
+  | "approved";
+
+export type OrderStatus =
+  | "pending"
+  | "processing"
+  | "paid"
+  | "failed"
+  | "refunded"
+  | "partially_refunded"
+  | "cancelled";
+
+export type PaymentGateway = "sslcommerz" | "stripe" | "manual_bank";
+
+export type Profile = Database["public"]["Tables"]["profiles"]["Row"];
+
+export type ServiceCategory = Omit<
+  Database["public"]["Tables"]["service_categories"]["Row"],
+  "sort_order"
+> & {
+  sort_order?: number;
+  code?: string;
+  name_bn?: string;
+  description?: string;
+  summary?: string;
+  display_order?: number;
+  created_at?: string;
+};
+
+export type Service = Database["public"]["Tables"]["services"]["Row"] & {
+  code?: string;
+  discipline_id?: string;
+  estimated_hours?: number;
+  express_eligible?: boolean;
+  express_rule?: string;
+  included?: string[];
+  excluded?: string[];
+  formats?: string[];
+  summary?: string;
+  created_at?: string;
+};
+
+export type AddOn = Database["public"]["Tables"]["add_ons"]["Row"] & {
+  code?: string;
+  label_bn?: string;
+  extra_hours?: number;
+  compatible_services?: string[];
+  summary?: string;
+  created_at?: string;
+};
+
+export interface ServiceVariant {
   id: string;
-  category_id: string;
+  serviceId: string;
   title: string;
-  title_bn: string | null;
-  base_usd: number;
-  base_bdt: number;
-  days: number;
-  revisions: number;
-  pricing_status: PricingStatus;
-  created_at: string;
-  updated_at: string;
+  titleBn: string;
+  scopeSummary: string;
+  estimatedHours: number;
+  hourMultiplier: number;
 }
 
-export interface AddOn {
+export interface CommercialBundle {
   id: string;
-  label: string;
-  unit_price_usd: number;
-  unit_price_bdt: number;
+  title: string;
+  titleBn: string;
+  includedServiceIds: string[];
+  estimatedHours: number;
+  turnaroundDays: string;
+  revisions: number;
+  summary: string;
+  deliverables: string[];
+  baseBdt: number;
+  baseUsd: number;
+}
+
+export interface AIMicroKit {
+  sku: string;
+  title: string;
+  titleBn: string;
+  priceBdt: number;
+  priceUsd: number;
+  statusLabel: string;
+  targetAudience: string;
+  includedOutputs: string[];
+  explicitExclusions: string[];
+  samplePreview: string;
+}
+
+export interface ConceptWork {
+  id: string;
+  disciplineId: string;
+  serviceId: string;
+  title: string;
+  categoryLabel: string;
+  truthBadge: "CONCEPT WORK — NOT CLIENT WORK";
+  deliverables: string[];
+  formats: string[];
+  visualTheme: string;
+  accentHex: string;
+  rationale: string;
+  imageUrl?: string;
 }
 
 export interface ServiceWithAddOns extends Service {
   category?: ServiceCategory;
   addOns: AddOn[];
-}
-
-export type MarketType = "BD" | "US" | "Global";
-export type Currency = "BDT" | "USD";
-
-export interface PackageObjective {
-  goal: string;
-  market: MarketType;
-  industry?: string;
-  timeline?: string;
-  notes?: string;
+  variants?: ServiceVariant[];
 }
 
 export interface ServiceConfig {
-  quantity: number;
+  variantId?: string;
   format?: string;
+  duration?: string;
+  aspectRatio?: string;
+  quantity?: number;
   rush?: boolean;
-  parameters?: Record<string, string | number | boolean>;
+  express10Min?: boolean;
+  sourceFilesReady?: boolean;
+  singleMicroEditConfirmed?: boolean;
+  notes?: string;
+}
+
+export interface PricingBreakdownItem {
+  serviceId: string;
+  title: string;
+  basePriceBDT: number;
+  basePriceUSD: number;
+  quantity: number;
+  rushApplied: boolean;
+  rushFeeBDT: number;
+  rushFeeUSD: number;
+  selectedAddOns: {
+    id: string;
+    label: string;
+    priceBDT: number;
+    priceUSD: number;
+    extraHours?: number;
+  }[];
+  lineTotalBDT: number;
+  lineTotalUSD: number;
+  pricingStatus: PricingStatus;
+  scopedHours?: number;
+  variantId?: string;
+  expressEligible?: boolean;
 }
 
 export interface PricingSummary {
-  currency: Currency;
+  items: PricingBreakdownItem[];
   subtotalBDT: number;
   subtotalUSD: number;
   rushSurchargeBDT: number;
   rushSurchargeUSD: number;
   addOnsTotalBDT: number;
   addOnsTotalUSD: number;
+  promoDiscountBDT?: number;
+  promoDiscountUSD?: number;
+  promoActive?: boolean;
+  promoLabel?: string;
+  totalScopedHours?: number;
+  hourlyRateBDT?: number;
+  hourlyRateUSD?: number;
+  ratebookVersion?: string;
   finalBDT: number;
   finalUSD: number;
+  currency: Currency;
   quoteRequired: boolean;
   quoteReasons: string[];
 }
 
+export interface PackageBuilderState {
+  selectedCategoryIds: string[];
+  selectedServiceIds: string[];
+  serviceConfigs: Record<string, ServiceConfig>;
+  selectedAddOns: Record<string, string[]>;
+  bundleId?: string | null;
+  brief: {
+    brandName: string;
+    objective: string;
+    audience: string;
+    platforms: string;
+    referenceLinks?: string;
+    deliverableFormat?: string;
+    timelinePreference?: "standard" | "priority_window" | "express_10min";
+    sourceFilesReady?: boolean;
+    singleMicroEditConfirmed?: boolean;
+  };
+  currency: Currency;
+}
+
 export interface PackageDraft {
   id: string;
-  userId?: string | null;
+  userId?: string;
   savedAt: string;
-  objective: PackageObjective;
+  objective: {
+    goal?: string;
+    market?: string;
+    industry?: string;
+    brandName?: string;
+    objective?: string;
+    audience?: string;
+    platforms?: string;
+    category?: string;
+    notes?: string;
+    [key: string]: unknown;
+  };
   services: string[];
   serviceConfigs: Record<string, ServiceConfig>;
   selectedAddOns: Record<string, string[]>;
   pricing: PricingSummary;
+  updatedAt?: string;
 }
 
-export type QuoteStatus =
-  | "pending"
-  | "under_review"
-  | "approved"
-  | "issued"
-  | "accepted"
-  | "declined"
-  | "expired"
-  | "withdrawn"
-  | "converted";
-
-export interface Quote {
-  id: string;
-  quote_ref: string;
-  client_id: string;
-  client_name?: string;
-  client_email?: string;
-  organization_id?: string | null;
-  status: QuoteStatus;
-  currency: Currency;
-  amount_bdt: number;
-  amount_usd: number;
-  scope_snapshot: {
-    objective?: PackageObjective;
-    services: string[];
-    serviceConfigs: Record<string, ServiceConfig>;
-    selectedAddOns: Record<string, string[]>;
-    pricing: PricingSummary;
-  };
-  notes?: string | null;
-  admin_notes?: string | null;
-  expires_at: string;
-  issued_at?: string | null;
-  accepted_at?: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export type PaymentStatus =
-  | "pending"
-  | "awaiting_payment"
-  | "verifying"
-  | "paid"
-  | "failed"
-  | "cancelled"
-  | "refunded";
-
-export type ProjectLifecycleStatus =
-  | "awaiting_brief"
-  | "brief_submitted"
-  | "in_production"
-  | "client_review"
-  | "revision_requested"
-  | "revision_in_progress"
-  | "client_approved"
-  | "completed"
-  | "cancelled";
-
-export interface Order {
-  id: string;
-  order_ref: string;
-  client_id: string;
-  client_name?: string;
-  quote_id?: string | null;
-  currency: Currency;
-  amount: number;
-  amount_bdt: number;
-  amount_usd: number;
-  payment_status: PaymentStatus;
-  project_status: ProjectLifecycleStatus;
-  gateway?: string;
-  transaction_ref?: string;
-  scope_snapshot: {
-    objective?: PackageObjective;
-    services: string[];
-    serviceConfigs: Record<string, ServiceConfig>;
-    selectedAddOns: Record<string, string[]>;
-    pricing: PricingSummary;
-  };
-  created_at: string;
-  updated_at: string;
-}
-
-export interface PaymentTransaction {
-  id: string;
-  order_id: string;
-  gateway: "sslcommerz" | "stripe" | "bank_transfer" | "sandbox";
-  transaction_ref: string;
-  amount: number;
-  currency: Currency;
-  channel?: string | null;
-  verified: boolean;
-  verified_at?: string | null;
-  created_at: string;
-}
-
-export interface Project {
-  id: string;
-  order_id: string;
-  client_id: string;
-  assigned_pm_id?: string | null;
-  assigned_designer_id?: string | null;
-  title: string;
-  status: ProjectLifecycleStatus;
-  revisions_used: number;
-  max_revisions: number;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface ProjectBrief {
-  id: string;
-  project_id: string;
-  brand_name: string;
-  objective: string;
-  audience: string;
-  platforms: string;
-  answers: Record<string, string | number | boolean>;
-  submitted: boolean;
-  submitted_at?: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface ProjectTask {
-  id: string;
-  project_id: string;
-  title: string;
-  description?: string | null;
-  status: "todo" | "in_progress" | "review" | "done";
-  display_order: number;
-  created_at: string;
-}
-
-export interface ProjectAsset {
-  id: string;
-  project_id: string;
-  version_label: string;
-  file_name: string;
-  storage_path: string;
-  file_type: "image" | "video" | "pdf" | "archive";
-  file_size_bytes: number;
-  is_approved: boolean;
-  is_final_deliverable: boolean;
-  uploaded_by?: string | null;
-  created_at: string;
-}
-
-export interface AssetAnnotation {
-  id: string;
-  asset_id: string;
-  coord_x_percent: number;
-  coord_y_percent: number;
-  feedback_text: string;
-  created_by: string;
-  author_name?: string;
-  resolved: boolean;
-  created_at: string;
-}
-
-export interface ApprovalRecord {
-  id: string;
-  project_id: string;
-  asset_id?: string | null;
-  approved_by: string;
-  legal_terms_accepted: boolean;
-  notes?: string | null;
-  created_at: string;
-}

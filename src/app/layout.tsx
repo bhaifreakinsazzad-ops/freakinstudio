@@ -1,65 +1,89 @@
-import type { Metadata } from "next";
-import { Plus_Jakarta_Sans, JetBrains_Mono } from "next/font/google";
+import type { Metadata, Viewport } from "next";
+import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
-import { LocaleProvider } from "@/lib/i18n/context";
+import { I18nProvider } from "@/lib/i18n/context";
 import "./globals.css";
 
-const plusJakartaSans = Plus_Jakarta_Sans({
+const geistSans = Geist({
   variable: "--font-sans",
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800"],
 });
 
-const jetbrainsMono = JetBrains_Mono({
+const geistMono = Geist_Mono({
   variable: "--font-mono",
   subsets: ["latin"],
 });
 
-const siteUrl = process.env.NEXT_PUBLIC_APP_URL || "https://freakinstudio.com";
+export const viewport: Viewport = {
+  themeColor: "#090A0A",
+};
 
 export const metadata: Metadata = {
-  metadataBase: new URL(siteUrl),
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_APP_URL || "https://freakinstudio.space"
+  ),
   title: {
-    default: "Freakin's Studio — Creative Commerce Operating System",
-    template: "%s",
+    default:
+      "Freakin's Studio — Creative Office OS 2.0 | DESIGN. CREATE. PRODUCE. GROW.",
+    template: "%s | Freakin's Studio",
   },
   description:
-    "Bespoke graphic design, brand identity, video & 3D motion production, social content, paid ad creative, and corporate communication across 60 canonical services.",
-  openGraph: {
-    type: "website",
-    siteName: "Freakin's Studio",
-    title: "Freakin's Studio — Creative Commerce Operating System",
-    description:
-      "60 precision creative services across 7 disciplines with server-authoritative BDT & USD pricing, interactive proofing, and commercial buyout delivery.",
-    images: [
-      {
-        url: "/images/portfolio/brand-identity.jpg",
-        width: 1200,
-        height: 900,
-        alt: "Freakin's Studio — Creative Commerce Operating System",
-      },
+    "DESIGN. CREATE. PRODUCE. GROW. 6 zero-login local browser creative tools, 5 Puter-free sponsored Studio AI assistants, 3 AI micro-kits (৳49/৳99/৳199), and 13 hourly-scoped human creative services across 4 disciplines.",
+  keywords: [
+    "Freakin's Studio",
+    "Creative Office OS",
+    "Design Studio Bangladesh",
+    "Brand Identity",
+    "Packaging Design",
+    "Motion Graphics",
+    "Social Media Creative",
+    "AI Micro-Kits",
+  ],
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "FreakinsOS",
+  },
+  icons: {
+    icon: [
+      { url: "/pwa-192x192.png", sizes: "192x192", type: "image/png" },
+      { url: "/pwa-512x512.png", sizes: "512x512", type: "image/png" },
+      { url: "/icon.svg", type: "image/svg+xml" },
     ],
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180" }],
+  },
+  openGraph: {
+    title: "Freakin's Studio — Creative Office OS 2.0",
+    description:
+      "Free browser-native creative tools, sponsored Studio AI direction, and 13 hourly-scoped human creative services across 4 disciplines.",
+    url: "https://freakinstudio.space",
+    siteName: "Freakin's Studio",
+    type: "website",
+    locale: "en_US",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Freakin's Studio — Creative Commerce Operating System",
+    title: "Freakin's Studio — Creative Office OS 2.0",
     description:
-      "60 precision creative services across 7 disciplines with transparent pricing, interactive proofing, and commercial buyout delivery.",
-    images: ["/images/portfolio/brand-identity.jpg"],
+      "DESIGN. CREATE. PRODUCE. GROW. Free creative utilities, Studio AI assistants, and 13 human creative services.",
   },
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
   return (
     <html
       lang="en"
-      className={`dark ${plusJakartaSans.variable} ${jetbrainsMono.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} dark h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col cyber-scrollbar">
-        <LocaleProvider>
+      <body className="min-h-full flex flex-col bg-[#090A0A] text-[#F6F4EF] selection:bg-[#D9BD81] selection:text-[#090A0A] cyber-scrollbar">
+        <I18nProvider>
           {children}
-        </LocaleProvider>
-        <Toaster theme="dark" />
+          <Toaster position="bottom-right" richColors />
+        </I18nProvider>
       </body>
     </html>
   );

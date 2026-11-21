@@ -1,965 +1,392 @@
 "use client";
 
-import { useState, useMemo, useTransition } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import type {
-  Service,
-  ServiceCategory,
-  AddOn,
-  Currency,
-  MarketType,
-  PackageObjective,
-  ServiceConfig,
-  PricingSummary,
-  PackageDraft,
-} from "@/types/domain";
-import { getServiceConfigSchema, getAddOnFamily } from "@/lib/catalog";
-import { calculatePricingSummary } from "@/lib/pricing/engine";
-import {
-  saveLocalDraft,
-  getLocalDraft,
-} from "@/lib/builder/draft-storage";
-import {
-  saveDraftAction,
-  requestQuoteAction,
-  createOrderFromBuilderAction,
-  deleteDraftAction,
-} from "./actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
+import {
+  calculatePricingSummary,
+  evaluateExpress10MinEligibility,
+} from "@/lib/pricing/engine";
+import { getServiceConfigSchema } from "@/lib/catalog";
+import { saveBuilderDraft, clearBuilderDraft } from "@/lib/builder/draft-storage";
+import { submitPackageAction } from "./actions";
+import type {
+  AddOn,
+  CommercialBundle,
+  Currency,
+  PaymentGateway,
+  Service,
+  ServiceCategory,
+  ServiceConfig,
+  ServiceVariant,
+} from "@/types/domain";
 
 interface PackageBuilderClientProps {
   categories: ServiceCategory[];
   services: Service[];
+  variants: ServiceVariant[];
+  bundles: CommercialBundle[];
   addOns: AddOn[];
-  serviceAddOnsMap?: Record<string, AddOn[]>;
-  initialDrafts?: PackageDraft[];
+  serviceAddOnsMap: Record<string, string[]>;
   initialServiceId?: string;
-  paymentStatus?: string;
-  paymentError?: string;
+  initialBundleId?: string | null;
   isAuthenticated: boolean;
 }
+
+const STEPS = [
+  "1. Core Service & Bundle",
+  "2. Variant & Add-ons",
+  "3. Smart Brief & Timeline",
+  "4. Review & Submit",
+];
 
 export function PackageBuilderClient({
   categories,
   services,
+  variants,
+  bundles,
   addOns,
   serviceAddOnsMap,
-  initialDrafts = [],
   initialServiceId,
-  paymentStatus,
-  paymentError,
+  initialBundleId,
   isAuthenticated,
 }: PackageBuilderClientProps) {
   const router = useRouter();
-  const [isPending, startTransition] = useTransition();
-  const [dismissedPaymentAlert, setDismissedPaymentAlert] = useState(false);
+  const [step, setStep] = useState(0);
+  const [currency, setCurrency] = useState<Currency>("BDT");
 
-  const validInitialServiceId =
-    initialServiceId && services.some((s) => s.id === initialServiceId.toUpperCase())
-      ? initialServiceId.toUpperCase()
-      : undefined;
-
-  // Current Step (1 - 7)
-  const [currentStep, setCurrentStep] = useState<number>(1);
-  const [draftId] = useState<string>(() => {
-    const existing = getLocalDraft();
-    return existing?.id || `DRAFT-${Date.now()}`;
-  });
-  const [savedDrafts, setSavedDrafts] = useState<PackageDraft[]>(initialDrafts);
-
-  const handleLoadDraft = (d: PackageDraft) => {
-    if (d.objective) setObjective(d.objective);
-    if (d.services && d.services.length > 0) setSelectedServices(d.services);
-    if (d.serviceConfigs) setServiceConfigs(d.serviceConfigs);
-    if (d.selectedAddOns) setSelectedAddOns(d.selectedAddOns);
-    if (d.pricing?.currency) setCurrency(d.pricing.currency);
-    toast.success("Loaded saved cloud draft: " + (d.objective?.goal ? d.objective.goal.slice(0, 30) : d.id));
-  };
-
-  const handleDeleteDraft = async (id: string) => {
-    setSavedDrafts((prev) => prev.filter((d) => d.id !== id));
-    await deleteDraftAction(id);
-    toast.success("Draft removed from cloud storage");
-  };
-
-  // Step 1: Objective — initialized lazily from draft if present
-  const [objective, setObjective] = useState<PackageObjective>(() => {
-    const draft = getLocalDraft();
-    if (draft?.objective) return draft.objective;
-    return {
-      goal: "Launch a new business / Brand launch",
-      market: "BD",
-      industry: "E-commerce & Retail",
-      timeline: "Standard (3-7 Business Days)",
-      notes: "",
-    };
-  });
-
-  // Step 2: Selected Services — URL ?service= parameter takes precedence over stale localStorage draft
-  const [selectedServices, setSelectedServices] = useState<string[]>(() => {
-    if (validInitialServiceId) return [validInitialServiceId];
-    const draft = getLocalDraft();
-    if (draft?.services && draft.services.length > 0) return draft.services;
-    return ["A01"];
-  });
-
-  // Category filter & search for Step 2
-  const [activeCategory, setActiveCategory] = useState<string>(() => {
-    if (validInitialServiceId) return validInitialServiceId.charAt(0);
-    return "ALL";
-  });
-  const [searchQuery, setSearchQuery] = useState<string>("");
-
-  // Step 3: Service Configs — ensure selected initial service always has a schema config
-  const [serviceConfigs, setServiceConfigs] = useState<Record<string, ServiceConfig>>(() => {
-    const initConfigs: Record<string, ServiceConfig> = {};
-    if (!validInitialServiceId) {
-      const draft = getLocalDraft();
-      if (draft?.serviceConfigs && Object.keys(draft.serviceConfigs).length > 0) {
-        return draft.serviceConfigs;
-      }
+  const validInitialId = useMemo(() => {
+    if (
+      initialServiceId &&
+      services.some((s) => s.id === initialServiceId)
+    ) {
+      return initialServiceId;
     }
-    const initList = validInitialServiceId ? [validInitialServiceId] : ["A01"];
-    initList.forEach((id) => {
-      const schema = getServiceConfigSchema(id);
-      initConfigs[id] = {
-        quantity: schema.defaultQuantity,
-        format: schema.defaultFormat,
-        rush: false,
-      };
+    return services[0]?.id || "SRV-01";
+  }, [initialServiceId, services]);
+
+  const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>([
+    validInitialId,
+  ]);
+  const [selectedBundleId, setSelectedBundleId] = useState<string | null>(
+    initialBundleId || null
+  );
+  const [serviceConfigs, setServiceConfigs] = useState<
+    Record<string, ServiceConfig>
+  >({});
+  const [selectedAddOns, setSelectedAddOns] = useState<
+    Record<string, string[]>
+  >({});
+  const [promoEvaluationDate, setPromoEvaluationDate] =
+    useState<string>("2026-11-25");
+
+  const [brief, setBrief] = useState({
+    brandName: "",
+    objective: "",
+    audience: "",
+    platforms: "Instagram, Facebook, LinkedIn, Print",
+  });
+  const [gateway, setGateway] = useState<PaymentGateway>("sslcommerz");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Sync draft to localStorage
+  useEffect(() => {
+    saveBuilderDraft({
+      selectedCategoryIds: [],
+      selectedServiceIds,
+      serviceConfigs,
+      selectedAddOns,
+      bundleId: selectedBundleId,
+      brief,
+      currency,
     });
-    return initConfigs;
-  });
+  }, [
+    selectedServiceIds,
+    serviceConfigs,
+    selectedAddOns,
+    selectedBundleId,
+    brief,
+    currency,
+  ]);
 
-  // Step 4: Selected Add-ons (serviceId -> addOnIds[])
-  const [selectedAddOns, setSelectedAddOns] = useState<Record<string, string[]>>(() => {
-    const draft = getLocalDraft();
-    return draft?.selectedAddOns || {};
-  });
-
-  // Currency selection — derived or restored from draft
-  const [currency, setCurrency] = useState<Currency>(() => {
-    const draft = getLocalDraft();
-    if (draft?.pricing?.currency) return draft.pricing.currency;
-    return "BDT";
-  });
-
-  // Payment checkout modal state
-  const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState(false);
-  const [checkoutGateway, setCheckoutGateway] = useState<"sslcommerz" | "stripe">("sslcommerz");
-  const [checkoutPhase, setCheckoutPhase] = useState<"select" | "redirecting" | "verifying" | "success">("select");
-  const [settlementChannel, setSettlementChannel] = useState<string>("bKash");
-  const [completedOrderData, setCompletedOrderData] = useState<{
-    orderRef: string;
-    txId: string;
-    orderId?: string;
-  } | null>(null);
-
-  // Service lookup map
-  const serviceMap = useMemo(() => {
-    const map = new Map<string, Service>();
-    services.forEach((s) => map.set(s.id, s));
-    return map;
-  }, [services]);
-
-  // Live pricing summary
-  const pricingSummary: PricingSummary = useMemo(() => {
-    return calculatePricingSummary({
-      serviceIds: selectedServices,
+  const pricing = useMemo(
+    () =>
+      calculatePricingSummary({
+        serviceIds: selectedServiceIds,
+        serviceConfigs,
+        selectedAddOns,
+        currency,
+        catalogServices: services,
+        catalogAddOns: addOns,
+        bundleId: selectedBundleId,
+        evaluationDate: promoEvaluationDate,
+      }),
+    [
+      selectedServiceIds,
       serviceConfigs,
       selectedAddOns,
       currency,
-      catalogServices: services,
-      catalogAddOns: addOns,
-    });
-  }, [selectedServices, serviceConfigs, selectedAddOns, currency, services, addOns]);
+      services,
+      addOns,
+      selectedBundleId,
+      promoEvaluationDate,
+    ]
+  );
 
-  // Current draft representation
-  const currentDraft: PackageDraft = useMemo(() => {
-    return {
-      id: draftId,
-      savedAt: new Date().toISOString(),
-      objective,
-      services: selectedServices,
-      serviceConfigs,
-      selectedAddOns,
-      pricing: pricingSummary,
-    };
-  }, [draftId, objective, selectedServices, serviceConfigs, selectedAddOns, pricingSummary]);
-
-  // Toggle service selection
   const toggleService = (id: string) => {
-    setSelectedServices((prev) => {
-      let nextServices: string[];
-      if (prev.includes(id)) {
-        if (prev.length === 1) {
-          toast.error("Package must include at least one creative service.");
-          return prev;
-        }
-        nextServices = prev.filter((s) => s !== id);
-      } else {
-        nextServices = [...prev, id];
-        // Ensure config is present for newly added service
-        if (!serviceConfigs[id]) {
-          const schema = getServiceConfigSchema(id);
-          setServiceConfigs((c) => ({
-            ...c,
-            [id]: {
-              quantity: schema.defaultQuantity,
-              format: schema.defaultFormat,
-              rush: false,
-            },
-          }));
-        }
-      }
-      return nextServices;
-    });
+    setSelectedBundleId(null);
+    setSelectedServiceIds((prev) =>
+      prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]
+    );
   };
 
-  // Toggle add-on for a service
+  const applyBundle = (bundle: CommercialBundle) => {
+    setSelectedBundleId(bundle.id);
+    setSelectedServiceIds(bundle.includedServiceIds);
+    toast.success(`Loaded ${bundle.id}: ${bundle.title}`);
+  };
+
+  const updateConfig = (serviceId: string, patch: Partial<ServiceConfig>) => {
+    setServiceConfigs((prev) => ({
+      ...prev,
+      [serviceId]: {
+        ...(prev[serviceId] || { quantity: 1, rush: false }),
+        ...patch,
+      },
+    }));
+  };
+
   const toggleAddOn = (serviceId: string, addOnId: string) => {
     setSelectedAddOns((prev) => {
       const current = prev[serviceId] || [];
       const updated = current.includes(addOnId)
-        ? current.filter((id) => id !== addOnId)
+        ? current.filter((a) => a !== addOnId)
         : [...current, addOnId];
       return { ...prev, [serviceId]: updated };
     });
   };
 
-  // Update specific service config
-  const updateConfig = (
-    serviceId: string,
-    updates: Partial<ServiceConfig>
-  ) => {
-    setServiceConfigs((prev) => ({
-      ...prev,
-      [serviceId]: { ...prev[serviceId], ...updates },
-    }));
-  };
-
-  // Save draft action
-  const handleSaveDraft = async () => {
-    saveLocalDraft(currentDraft);
-    startTransition(async () => {
-      const res = await saveDraftAction(currentDraft);
-      if (res.ok) {
-        if (res.isGuest) {
-          toast.success("Draft saved in browser memory! Sign in to sync across devices.");
-        } else {
-          toast.success("Package draft safely synced to your account database!");
-        }
-      } else {
-        toast.error(res.error || "Failed to sync draft");
-      }
-    });
-  };
-
-  // Request quotation action
-  const handleRequestQuote = async () => {
-    startTransition(async () => {
-      const res = await requestQuoteAction(currentDraft);
-      if (res.ok) {
-        toast.success(`Formal Quotation Request ${res.quoteRef} lodged with Studio Operations!`);
-        router.push("/dashboard");
-      } else if (res.requiresAuth) {
-        toast.error(res.message, {
-          action: {
-            label: "Sign In",
-            onClick: () => router.push("/login?next=/builder"),
-          },
-        });
-      } else {
-        toast.error(res.error || "Failed to lodge quote request.");
-      }
-    });
-  };
-
-  // Initiate checkout flow
-  const handleStartCheckout = (gateway: "sslcommerz" | "stripe") => {
-    if (!isAuthenticated) {
-      toast.error("Please sign in or create an account before launching checkout.", {
-        action: {
-          label: "Sign In",
-          onClick: () => router.push("/login?next=/builder"),
-        },
-      });
+  const handleComplete = async (intent: "checkout" | "quote") => {
+    if (selectedServiceIds.length === 0) {
+      toast.error("Please select at least one creative service.");
       return;
     }
-    setCheckoutGateway(gateway);
-    setCheckoutPhase("select");
-    setIsCheckoutModalOpen(true);
+
+    if (!brief.brandName.trim() || !brief.objective.trim()) {
+      toast.error(
+        "Please enter your brand name and project objective in Step 3."
+      );
+      setStep(2);
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const res = await submitPackageAction({
+        serviceIds: selectedServiceIds,
+        serviceConfigs,
+        selectedAddOns,
+        brief,
+        currency,
+        gateway,
+        intent,
+      });
+
+      if (res.requiresAuth) {
+        toast.info(
+          "Your Smart Brief draft is saved! Sign in or create an account to finalize."
+        );
+        router.push("/login?next=/builder");
+        return;
+      }
+
+      if (!res.ok) {
+        toast.error(res.error || "Failed to process package.");
+        return;
+      }
+
+      clearBuilderDraft();
+      toast.success(
+        intent === "quote"
+          ? "Smart Brief & Studio Quotation request submitted!"
+          : "Project workspace initialized!"
+      );
+
+      if (res.redirectUrl) {
+        window.location.href = res.redirectUrl;
+      }
+    } catch {
+      toast.error("An unexpected error occurred.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  // Execute verified simulated checkout adapter
-  const handleConfirmCheckoutPayment = () => {
-    setCheckoutPhase("redirecting");
-
-    setTimeout(() => {
-      setCheckoutPhase("verifying");
-
-      setTimeout(async () => {
-        const res = await createOrderFromBuilderAction(currentDraft, checkoutGateway);
-        if (res.ok && res.orderRef && res.txId) {
-          if (res.redirectUrl && !res.redirectUrl.includes("simulated=true")) {
-            window.location.href = res.redirectUrl;
-            return;
-          }
-          setCheckoutPhase("success");
-          setCompletedOrderData({
-            orderRef: res.orderRef,
-            txId: res.txId,
-            orderId: res.orderId,
-          });
-          toast.success(`Order ${res.orderRef} confirmed! Project workspace initialized.`);
-        } else {
-          toast.error(res.error || "Payment verification failed.");
-          setCheckoutPhase("select");
-        }
-      }, 1500);
-    }, 1200);
-  };
-
-  // Filtered services for Step 2
-  const step2Services = useMemo(() => {
-    return services.filter((s) => {
-      const matchCat = activeCategory === "ALL" || s.category_id === activeCategory;
-      const q = searchQuery.toLowerCase().trim();
-      const matchQ =
-        !q ||
-        s.id.toLowerCase().includes(q) ||
-        s.title.toLowerCase().includes(q) ||
-        (s.title_bn && s.title_bn.toLowerCase().includes(q));
-      return matchCat && matchQ;
-    });
-  }, [services, activeCategory, searchQuery]);
+  const symbol = currency === "BDT" ? "৳" : "$";
 
   return (
     <div className="space-y-8">
-      {/* Payment Callback Error/Status Banner */}
-      {!dismissedPaymentAlert && (paymentStatus === "failed" || paymentError) && (
-        <div className="p-4 rounded-2xl border border-brand-danger/40 bg-brand-danger/10 flex items-start justify-between gap-4 text-xs font-mono">
-          <div className="space-y-1">
-            <span className="font-bold text-brand-danger uppercase block">
-              Payment Settlement Interrupted
-            </span>
-            <p className="text-brand-light">
-              {paymentError || "The payment gateway returned an unsuccessful status. Please verify your settlement channel and try again."}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => setDismissedPaymentAlert(true)}
-            className="text-brand-muted hover:text-brand-light px-2 py-1"
-            aria-label="Dismiss payment notice"
-          >
-            ✕
-          </button>
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#232528] pb-6">
+        <div>
+          <span className="badge-mono text-[#D9BD81]">
+            Progressive Smart Project Brief &bull; 13 Canonical Services
+          </span>
+          <h1 className="text-2xl sm:text-4xl font-bold text-[#F6F4EF] mt-1">
+            Smart Project Brief &amp; Hourly Scope Estimator
+          </h1>
         </div>
-      )}
 
-      {/* Step Navigation Progress Bar */}
-      <div className="glass-panel p-4 rounded-2xl border border-brand-border space-y-3">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <span className="badge-mono text-brand-highlight px-2 py-0.5 rounded bg-brand-highlight/10 font-bold">
-              STEP {currentStep} OF 7
-            </span>
-            <span className="text-xs font-mono text-brand-light font-semibold">
-              {currentStep === 1 && "Campaign & Commercial Objective"}
-              {currentStep === 2 && `Select Canonical Services (${selectedServices.length} Selected)`}
-              {currentStep === 3 && "Configure Quantities & Format Scope"}
-              {currentStep === 4 && "Select Specialized Add-ons"}
-              {currentStep === 5 && "Live Scope Audit & Snapshot"}
-              {currentStep === 6 && "Server-Authoritative Pricing"}
-              {currentStep === 7 && "Verified Launch & Checkout"}
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleSaveDraft}
-              disabled={isPending}
-              className="text-xs font-mono h-8 border-brand-border"
+        <div className="flex items-center gap-2 self-start">
+          <div className="flex items-center rounded-md border border-[#232528] bg-[#121315] p-0.5 text-xs font-mono">
+            <button
+              type="button"
+              onClick={() => setCurrency("BDT")}
+              className={`px-3 py-1 rounded ${
+                currency === "BDT"
+                  ? "bg-[#D9BD81] text-[#090A0A] font-bold"
+                  : "text-[#F6F4EF]/65"
+              }`}
             >
-              Save Draft
-            </Button>
-            <div className="flex items-center rounded-lg border border-brand-border bg-brand-surface p-0.5">
-              <button
-                type="button"
-                onClick={() => setCurrency("BDT")}
-                className={`px-2 py-0.5 rounded text-[11px] font-mono font-semibold ${
-                  currency === "BDT"
-                    ? "bg-brand-card text-brand-light"
-                    : "text-brand-muted hover:text-brand-light"
-                }`}
-              >
-                ৳ BDT
-              </button>
-              <button
-                type="button"
-                onClick={() => setCurrency("USD")}
-                className={`px-2 py-0.5 rounded text-[11px] font-mono font-semibold ${
-                  currency === "USD"
-                    ? "bg-brand-card text-brand-light"
-                    : "text-brand-muted hover:text-brand-light"
-                }`}
-              >
-                $ USD
-              </button>
-            </div>
+              ৳ BDT
+            </button>
+            <button
+              type="button"
+              onClick={() => setCurrency("USD")}
+              className={`px-3 py-1 rounded ${
+                currency === "USD"
+                  ? "bg-[#D9BD81] text-[#090A0A] font-bold"
+                  : "text-[#F6F4EF]/65"
+              }`}
+            >
+              $ USD
+            </button>
           </div>
-        </div>
-
-        {/* 7-Segment Progress Track */}
-        <div className="grid grid-cols-7 gap-1.5 pt-1">
-          {[1, 2, 3, 4, 5, 6, 7].map((step) => {
-            const isActive = step === currentStep;
-            const isCompleted = step < currentStep;
-            return (
-              <button
-                key={step}
-                type="button"
-                onClick={() => setCurrentStep(step)}
-                className={`h-2 rounded-full transition-all ${
-                  isActive
-                    ? "bg-brand-highlight shadow-md ring-2 ring-brand-highlight/40"
-                    : isCompleted
-                    ? "bg-brand-success/80"
-                    : "bg-brand-border/60 hover:bg-brand-border"
-                }`}
-                title={`Jump to Step ${step}`}
-              />
-            );
-          })}
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-        {/* Main Step Canvas */}
-        <div className="lg:col-span-8 space-y-6">
-          {savedDrafts.length > 0 && currentStep === 1 && (
-            <div className="p-4 rounded-2xl bg-brand-surface/90 border border-brand-border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
-              <div className="flex items-center gap-2">
-                <Badge variant="outline" className="text-brand-highlight border-brand-highlight/30 font-mono">
-                  Saved Cloud Drafts ({savedDrafts.length})
-                </Badge>
-                <span className="text-brand-muted font-mono text-[11px]">
-                  Resume a configured package from your account.
-                </span>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                {savedDrafts.map((d) => (
-                  <div key={d.id} className="flex items-center gap-1.5 bg-brand-black px-2.5 py-1 rounded-lg border border-brand-border">
-                    <button
-                      type="button"
-                      onClick={() => handleLoadDraft(d)}
-                      className="text-[11px] font-mono text-brand-light hover:text-brand-highlight font-bold"
-                    >
-                      {d.objective?.goal ? d.objective.goal.slice(0, 24) + "..." : d.id}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteDraft(d.id)}
-                      className="text-brand-muted hover:text-red-400 text-[10px] ml-1"
-                      title="Delete draft"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+      {/* Stepper Bar */}
+      <div className="flex overflow-x-auto gap-2 pb-2">
+        {STEPS.map((label, idx) => (
+          <button
+            type="button"
+            key={label}
+            onClick={() => setStep(idx)}
+            className={`px-3.5 py-2 rounded-lg text-xs font-mono whitespace-nowrap transition-colors ${
+              step === idx
+                ? "bg-[#D9BD81] text-[#090A0A] font-bold"
+                : idx < step
+                ? "bg-[#121315] text-[#F6F4EF] border border-[#D9BD81]/40"
+                : "bg-[#121315]/50 text-[#F6F4EF]/60 border border-[#232528]"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
 
-          {/* STEP 1: CAMPAIGN OBJECTIVE */}
-          {currentStep === 1 && (
-            <div className="glass-panel p-6 sm:p-8 rounded-3xl border border-brand-border space-y-6">
+      {/* Main Content + Live Ledger Sidebar */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+        <div className="lg:col-span-2 rounded-2xl border border-[#232528] bg-[#121315] p-6 sm:p-8 space-y-6">
+          {/* STEP 0: Select Core Services (13) or Commercial Bundle (5) */}
+          {step === 0 && (
+            <div className="space-y-6">
               <div>
-                <h2 className="text-xl font-black text-brand-light tracking-tight">
-                  1. Define Campaign & Commercial Objective
+                <h2 className="text-xl font-bold text-[#F6F4EF]">
+                  1. Select Core Creative Services (13) or Commercial Bundle (5)
                 </h2>
-                <p className="text-xs text-brand-muted mt-1 font-mono">
-                  Specify your primary goal, target market and operational industry to tailor service recommendations.
+                <p className="text-xs text-[#F6F4EF]/65 mt-1">
+                  Choose individual services across our 4 disciplines or quick-load one of the 5 commercial bundles.
                 </p>
               </div>
 
-              <div className="space-y-4 text-xs">
-                <div>
-                  <label className="font-mono text-brand-muted block mb-2 uppercase text-[11px]">
-                    Primary Commercial Goal
-                  </label>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                    {[
-                      "Launch a new business / Brand launch",
-                      "Build brand identity & guidelines",
-                      "Create high-volume social media content",
-                      "Produce commercial video/motion assets",
-                      "Prepare corporate pitch deck & company profile",
-                      "Enterprise Rebranding & Re-positioning",
-                      "Advertising campaign visual suite",
-                      "AI-assisted creative workflow transformation",
-                    ].map((goal) => (
+              {/* Quick Load 5 Bundles */}
+              <div className="space-y-2">
+                <span className="font-mono text-[10px] uppercase tracking-wider text-[#D9BD81] block">
+                  Optional: Load a Commercial Bundle (BND-01 to BND-05)
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {bundles.map((b) => {
+                    const active = selectedBundleId === b.id;
+                    return (
                       <button
-                        key={goal}
                         type="button"
-                        onClick={() => setObjective({ ...objective, goal })}
-                        className={`p-3.5 rounded-xl border text-left font-medium transition-all ${
-                          objective.goal === goal
-                            ? "bg-brand-light text-brand-black border-white font-bold shadow-md"
-                            : "bg-brand-surface border-brand-border text-brand-light hover:border-brand-highlight/40"
+                        key={b.id}
+                        onClick={() => applyBundle(b)}
+                        className={`text-left p-3 rounded-xl border transition-all ${
+                          active
+                            ? "border-[#D9BD81] bg-[#D9BD81]/15"
+                            : "border-[#232528] bg-[#090A0A]/60 hover:border-[#D9BD81]/40"
                         }`}
                       >
-                        {goal}
+                        <div className="flex items-center justify-between font-mono text-xs">
+                          <span className="font-bold text-[#D9BD81]">{b.id}</span>
+                          <span className="text-[10px] text-[#F6F4EF]/65">
+                            {b.estimatedHours}h &bull; {b.includedServiceIds.join(" + ")}
+                          </span>
+                        </div>
+                        <p className="text-xs font-semibold text-[#F6F4EF] mt-1">
+                          {b.title}
+                        </p>
                       </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-                  <div>
-                    <label className="font-mono text-brand-muted block mb-1.5 uppercase text-[11px]">
-                      Target Market & Payment Rail
-                    </label>
-                    <select
-                      value={objective.market}
-                      onChange={(e) => {
-                        const m = e.target.value as MarketType;
-                        setObjective((prev) => ({ ...prev, market: m }));
-                        setCurrency(m === "BD" ? "BDT" : "USD");
-                      }}
-                      className="w-full bg-brand-surface border border-brand-border rounded-xl px-3 py-2 text-xs font-mono text-brand-light focus:outline-none"
-                    >
-                      <option value="BD">Bangladesh (BDT — bKash / Nagad / Local Cards)</option>
-                      <option value="US">United States (USD — International Visa / Mastercard)</option>
-                      <option value="Global">Global / International (USD)</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="font-mono text-brand-muted block mb-1.5 uppercase text-[11px]">
-                      Industry Sector
-                    </label>
-                    <select
-                      value={objective.industry}
-                      onChange={(e) =>
-                        setObjective({ ...objective, industry: e.target.value })
-                      }
-                      className="w-full bg-brand-surface border border-brand-border rounded-xl px-3 py-2 text-xs font-mono text-brand-light focus:outline-none"
-                    >
-                      <option value="E-commerce & Retail">E-commerce & Retail</option>
-                      <option value="Tech / SaaS / Startups">Tech / SaaS / Startups</option>
-                      <option value="Corporate & Financial">Corporate & Financial</option>
-                      <option value="Education & EdTech">Education & EdTech</option>
-                      <option value="Personal Brand & Influencer">Personal Brand & Influencer</option>
-                      <option value="Real Estate & Hospitality">Real Estate & Hospitality</option>
-                      <option value="Fashion, Beauty & Lifestyle">Fashion, Beauty & Lifestyle</option>
-                      <option value="Healthcare & Wellness">Healthcare & Wellness</option>
-                      <option value="Other">Other / Custom</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="font-mono text-brand-muted block mb-1.5 uppercase text-[11px]">
-                    Special Operational Notes (Optional)
-                  </label>
-                  <textarea
-                    rows={3}
-                    placeholder="Provide any specific campaign requirements, target launch dates, or reference briefs..."
-                    value={objective.notes}
-                    onChange={(e) =>
-                      setObjective({ ...objective, notes: e.target.value })
-                    }
-                    className="w-full bg-brand-surface border border-brand-border rounded-xl p-3 text-xs font-mono text-brand-light placeholder:text-brand-muted focus:outline-none"
-                  />
+                    );
+                  })}
                 </div>
               </div>
 
-              <div className="flex justify-end pt-4 border-t border-brand-border">
-                <Button
-                  onClick={() => setCurrentStep(2)}
-                  className="cyber-glow bg-brand-highlight hover:bg-brand-highlight/90 text-brand-black font-semibold font-mono text-xs px-6"
-                >
-                  Proceed to Service Selection &rarr;
-                </Button>
-              </div>
-            </div>
-          )}
-
-          {/* STEP 2: SELECT SERVICES */}
-          {currentStep === 2 && (
-            <div className="glass-panel p-6 sm:p-8 rounded-3xl border border-brand-border space-y-6">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div>
-                  <h2 className="text-xl font-black text-brand-light tracking-tight">
-                    2. Select Canonical Services ({selectedServices.length} Selected)
-                  </h2>
-                  <p className="text-xs text-brand-muted mt-1 font-mono">
-                    Multi-select creative disciplines from the authoritative 60-service catalog.
-                  </p>
-                </div>
-
-                <div className="relative w-full sm:w-64">
-                  <Input
-                    type="text"
-                    placeholder="Search canonical catalog..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="bg-brand-surface border-brand-border text-brand-light text-xs font-mono h-9"
-                  />
-                </div>
-              </div>
-
-              {/* Category Filter Pills */}
-              <div className="flex gap-1.5 overflow-x-auto pb-1 cyber-scrollbar">
-                <button
-                  type="button"
-                  onClick={() => setActiveCategory("ALL")}
-                  className={`px-3 py-1 rounded-lg text-xs font-mono whitespace-nowrap transition-all ${
-                    activeCategory === "ALL"
-                      ? "bg-brand-light text-brand-black font-bold"
-                      : "bg-brand-surface border border-brand-border text-brand-muted hover:text-brand-light"
-                  }`}
-                >
-                  ALL (60)
-                </button>
-                {categories.map((c) => (
-                  <button
-                    key={c.id}
-                    type="button"
-                    onClick={() => setActiveCategory(c.id)}
-                    className={`px-3 py-1 rounded-lg text-xs font-mono whitespace-nowrap transition-all ${
-                      activeCategory === c.id
-                        ? "bg-brand-light text-brand-black font-bold"
-                        : "bg-brand-surface border border-brand-border text-brand-muted hover:text-brand-light"
-                    }`}
-                  >
-                    {c.id}
-                  </button>
-                ))}
-              </div>
-
-              {/* Services Selection Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[500px] overflow-y-auto cyber-scrollbar pr-1">
-                {step2Services.map((srv) => {
-                  const isSelected = selectedServices.includes(srv.id);
-                  const isQuoteReq = srv.pricing_status === "quote_required";
-                  const priceStr =
-                    currency === "BDT"
-                      ? `৳ ${Number(srv.base_bdt).toLocaleString()}`
-                      : `$ ${Number(srv.base_usd).toLocaleString()}`;
-
-                  return (
-                    <div
-                      key={srv.id}
-                      onClick={() => toggleService(srv.id)}
-                      className={`p-4 rounded-xl border cursor-pointer transition-all flex flex-col justify-between ${
-                        isSelected
-                          ? "bg-brand-highlight/10 border-brand-highlight shadow-sm"
-                          : "bg-brand-surface border-brand-border hover:border-brand-border/80"
-                      }`}
-                    >
-                      <div className="space-y-1.5">
-                        <div className="flex items-center justify-between">
-                          <span className="badge-mono text-brand-highlight font-bold text-xs">
-                            {srv.id}
-                          </span>
-                          <span
-                            className={`w-4 h-4 rounded-full border flex items-center justify-center text-[10px] font-bold ${
-                              isSelected
-                                ? "bg-brand-highlight text-brand-black border-brand-highlight"
-                                : "border-brand-border"
-                            }`}
-                          >
-                            {isSelected && "✓"}
-                          </span>
-                        </div>
-                        <h4 className="font-semibold text-xs text-brand-light">
-                          {srv.title}
-                        </h4>
-                        {srv.title_bn && (
-                          <p className="text-[11px] text-brand-muted font-serif">
-                            {srv.title_bn}
-                          </p>
-                        )}
-                      </div>
-
-                      <div className="mt-3 pt-2 border-t border-brand-border/60 flex items-center justify-between text-[11px] font-mono">
-                        <span className="text-brand-light font-bold">{priceStr}</span>
-                        <span
-                          className={`text-[10px] ${
-                            isQuoteReq ? "text-amber-400" : "text-emerald-400"
-                          }`}
-                        >
-                          {isQuoteReq ? "Quote Req" : `${srv.days}d turnaround`}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              <div className="flex items-center justify-between pt-4 border-t border-brand-border">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentStep(1)}
-                  className="font-mono text-xs"
-                >
-                  &larr; Back
-                </Button>
-                <Button
-                  onClick={() => setCurrentStep(3)}
-                  disabled={selectedServices.length === 0}
-                  className="cyber-glow bg-brand-highlight hover:bg-brand-highlight/90 text-brand-black font-semibold font-mono text-xs px-6"
-                >
-                  Configure Quantities ({selectedServices.length}) &rarr;
-                </Button>
-              </div>
-            </div>
-          )}
-
-          {/* STEP 3: CONFIGURE SCOPE */}
-          {currentStep === 3 && (
-            <div className="glass-panel p-6 sm:p-8 rounded-3xl border border-brand-border space-y-6">
-              <div>
-                <h2 className="text-xl font-black text-brand-light tracking-tight">
-                  3. Configure Quantities & Deliverable Sizing
-                </h2>
-                <p className="text-xs text-brand-muted mt-1 font-mono">
-                  Tailor deliverable volume, primary aspect ratios and priority turnaround for each selected service.
-                </p>
-              </div>
-
+              {/* 13 Services Grouped by 4 Disciplines */}
               <div className="space-y-5">
-                {selectedServices.map((sid) => {
-                  const srv = serviceMap.get(sid);
-                  if (!srv) return null;
-                  const cfg = serviceConfigs[sid] || {
-                    quantity: 1,
-                    format: "Standard",
-                    rush: false,
-                  };
-                  const schema = getServiceConfigSchema(sid);
-
-                  return (
-                    <div
-                      key={sid}
-                      className="p-5 rounded-2xl bg-brand-surface border border-brand-border space-y-4"
-                    >
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-brand-border/60 pb-3">
-                        <div className="flex items-center gap-2">
-                          <span className="badge-mono text-brand-highlight font-bold text-xs">
-                            {sid}
-                          </span>
-                          <h4 className="font-semibold text-sm text-brand-light">
-                            {srv.title}
-                          </h4>
-                        </div>
-                        <span className="text-xs font-mono text-brand-muted">
-                          Base:{" "}
-                          {currency === "BDT"
-                            ? `৳ ${Number(srv.base_bdt).toLocaleString()}`
-                            : `$ ${Number(srv.base_usd)}`}
-                        </span>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs font-mono">
-                        {/* Quantity Stepper */}
-                        <div>
-                          <label className="block text-brand-muted text-[11px] uppercase mb-1">
-                            {schema.quantityLabel}
-                          </label>
-                          <div className="flex items-center border border-brand-border rounded-xl bg-brand-black/60 overflow-hidden">
-                            <button
-                              type="button"
-                              onClick={() =>
-                                updateConfig(sid, {
-                                  quantity: Math.max(
-                                    schema.minQuantity,
-                                    cfg.quantity - 1
-                                  ),
-                                })
-                              }
-                              className="px-3 py-2 text-brand-muted hover:text-brand-light hover:bg-brand-surface transition-colors"
-                            >
-                              -
-                            </button>
-                            <input
-                              type="number"
-                              min={schema.minQuantity}
-                              max={schema.maxQuantity}
-                              value={cfg.quantity}
-                              onChange={(e) =>
-                                updateConfig(sid, {
-                                  quantity: Math.max(
-                                    schema.minQuantity,
-                                    Math.min(
-                                      schema.maxQuantity,
-                                      parseInt(e.target.value, 10) || 1
-                                    )
-                                  ),
-                                })
-                              }
-                              className="w-full text-center bg-transparent text-brand-light font-bold focus:outline-none"
-                            />
-                            <button
-                              type="button"
-                              onClick={() =>
-                                updateConfig(sid, {
-                                  quantity: Math.min(
-                                    schema.maxQuantity,
-                                    cfg.quantity + 1
-                                  ),
-                                })
-                              }
-                              className="px-3 py-2 text-brand-muted hover:text-brand-light hover:bg-brand-surface transition-colors"
-                            >
-                              +
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Format selector */}
-                        <div>
-                          <label className="block text-brand-muted text-[11px] uppercase mb-1">
-                            Deliverable Format / Sizing
-                          </label>
-                          <select
-                            value={cfg.format}
-                            onChange={(e) =>
-                              updateConfig(sid, { format: e.target.value })
-                            }
-                            className="w-full bg-brand-black/60 border border-brand-border rounded-xl px-3 py-2 text-xs font-mono text-brand-light focus:outline-none"
-                          >
-                            {schema.formatOptions.map((fmt) => (
-                              <option key={fmt} value={fmt}>
-                                {fmt}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-
-                        {/* Rush toggle */}
-                        <div>
-                          <label className="block text-brand-muted text-[11px] uppercase mb-1">
-                            Turnaround Priority
-                          </label>
-                          <label className="flex items-center gap-2 p-2 rounded-xl border border-brand-border bg-brand-black/40 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={!!cfg.rush}
-                              onChange={(e) =>
-                                updateConfig(sid, { rush: e.target.checked })
-                              }
-                              className="rounded border-brand-border text-brand-highlight focus:ring-0"
-                            />
-                            <span className="text-[11px] text-brand-light font-medium">
-                              Rush (×1.35 — 50% faster)
-                            </span>
-                          </label>
-                        </div>
-                      </div>
-                    </div>
+                {categories.map((cat) => {
+                  const catServices = services.filter(
+                    (s) => s.category_id === cat.id
                   );
-                })}
-              </div>
-
-              <div className="flex items-center justify-between pt-4 border-t border-brand-border">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentStep(2)}
-                  className="font-mono text-xs"
-                >
-                  &larr; Back
-                </Button>
-                <Button
-                  onClick={() => setCurrentStep(4)}
-                  className="cyber-glow bg-brand-highlight hover:bg-brand-highlight/90 text-brand-black font-semibold font-mono text-xs px-6"
-                >
-                  Proceed to Add-ons &rarr;
-                </Button>
-              </div>
-            </div>
-          )}
-
-          {/* STEP 4: SPECIALIZED ADD-ONS */}
-          {currentStep === 4 && (
-            <div className="glass-panel p-6 sm:p-8 rounded-3xl border border-brand-border space-y-6">
-              <div>
-                <h2 className="text-xl font-black text-brand-light tracking-tight">
-                  4. Select Specialized Service Add-ons
-                </h2>
-                <p className="text-xs text-brand-muted mt-1 font-mono">
-                  Enrich your production package with editable source files, extra localization, or multi-platform cutdowns (+{currency === "BDT" ? "৳ 3,000" : "$ 25"} each).
-                </p>
-              </div>
-
-              <div className="space-y-6">
-                {selectedServices.map((sid) => {
-                  const srv = serviceMap.get(sid);
-                  if (!srv) return null;
-                  const currentSelected = selectedAddOns[sid] || [];
-                  const serviceMappedAddOns = (serviceAddOnsMap && serviceAddOnsMap[sid]) || [];
-                  const relatedAddOns = serviceMappedAddOns.length > 0 ? serviceMappedAddOns : addOns.slice(0, 6);
-
                   return (
-                    <div
-                      key={sid}
-                      className="p-5 rounded-2xl bg-brand-surface border border-brand-border space-y-3"
-                    >
-                      <div className="flex items-center justify-between border-b border-brand-border/60 pb-2">
-                        <span className="text-xs font-mono font-bold text-brand-light">
-                          {sid} — {srv.title}
-                        </span>
-                        <span className="text-[11px] font-mono text-brand-muted">
-                          {currentSelected.length} Add-on(s) Selected
-                        </span>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                        {relatedAddOns.map((addon) => {
-                          const isChecked = currentSelected.includes(addon.id);
+                    <div key={cat.id} className="space-y-2.5">
+                      <h3 className="font-mono text-xs uppercase tracking-wider text-[#D9BD81] border-b border-[#232528] pb-1.5">
+                        {cat.id} &middot; {cat.name} ({catServices.length})
+                      </h3>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {catServices.map((srv) => {
+                          const active = selectedServiceIds.includes(srv.id);
+                          const price =
+                            currency === "BDT" ? srv.base_bdt : srv.base_usd;
                           return (
-                            <div
-                              key={addon.id}
-                              onClick={() => toggleAddOn(sid, addon.id)}
-                              className={`p-3 rounded-xl border cursor-pointer transition-all flex items-center justify-between text-xs ${
-                                isChecked
-                                  ? "bg-brand-highlight/15 border-brand-highlight font-semibold"
-                                  : "bg-brand-black/50 border-brand-border text-brand-muted hover:text-brand-light"
+                            <button
+                              type="button"
+                              key={srv.id}
+                              onClick={() => toggleService(srv.id)}
+                              className={`text-left p-3.5 rounded-xl border transition-all flex flex-col justify-between ${
+                                active
+                                  ? "border-[#D9BD81] bg-[#D9BD81]/15"
+                                  : "border-[#232528] bg-[#090A0A]/60 hover:border-[#D9BD81]/40"
                               }`}
                             >
-                              <div className="flex items-center gap-2">
-                                <span
-                                  className={`w-3.5 h-3.5 rounded border flex items-center justify-center text-[9px] font-bold ${
-                                    isChecked
-                                      ? "bg-brand-highlight text-brand-black border-brand-highlight"
-                                      : "border-brand-border"
-                                  }`}
-                                >
-                                  {isChecked && "✓"}
-                                </span>
-                                <div className="flex flex-col text-left">
-                                  <span className="text-brand-light font-mono text-[11px]">
-                                    {addon.label}
+                              <div>
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="font-mono text-xs font-bold text-[#D9BD81]">
+                                    {srv.id}
                                   </span>
-                                  <span className="text-[9px] font-mono text-brand-muted/70">
-                                    {getAddOnFamily(addon.label)}
+                                  <span className="font-mono text-[10px] text-[#F6F4EF]/65">
+                                    {srv.estimated_hours || 4}h &bull;{" "}
+                                    {srv.days}d
                                   </span>
                                 </div>
+                                <p className="text-sm font-semibold text-[#F6F4EF] mt-1">
+                                  {srv.title}
+                                </p>
                               </div>
-                              <span className="text-[10px] font-mono text-brand-highlight font-bold">
-                                +{currency === "BDT" ? "৳ 3,000" : "$ 25"}
-                              </span>
-                            </div>
+                              <div className="mt-3 pt-2 border-t border-[#232528] flex items-center justify-between text-xs font-mono">
+                                <span className="text-[#F6F4EF]/55">
+                                  {srv.revisions} Revisions
+                                </span>
+                                <span className="font-bold text-[#D9BD81]">
+                                  {symbol}
+                                  {price.toLocaleString()}
+                                </span>
+                              </div>
+                            </button>
                           );
                         })}
                       </div>
@@ -967,537 +394,597 @@ export function PackageBuilderClient({
                   );
                 })}
               </div>
-
-              <div className="flex items-center justify-between pt-4 border-t border-brand-border">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentStep(3)}
-                  className="font-mono text-xs"
-                >
-                  &larr; Back
-                </Button>
-                <Button
-                  onClick={() => setCurrentStep(5)}
-                  className="cyber-glow bg-brand-highlight hover:bg-brand-highlight/90 text-brand-black font-semibold font-mono text-xs px-6"
-                >
-                  Review Scope Audit &rarr;
-                </Button>
-              </div>
             </div>
           )}
 
-          {/* STEP 5: SCOPE AUDIT & SNAPSHOT */}
-          {currentStep === 5 && (
-            <div className="glass-panel p-6 sm:p-8 rounded-3xl border border-brand-border space-y-6">
+          {/* STEP 1: Configure Variants (15), Add-ons (14), and 10-Min Express Preflight */}
+          {step === 1 && (
+            <div className="space-y-6">
               <div>
-                <h2 className="text-xl font-black text-brand-light tracking-tight">
-                  5. Live Scope Audit & Deliverables Snapshot
+                <h2 className="text-xl font-bold text-[#F6F4EF]">
+                  2. Configure Scoped Variants (15) &amp; Compatible Add-ons (14)
                 </h2>
-                <p className="text-xs text-brand-muted mt-1 font-mono">
-                  Inspect assembled parameters, included revisions and deliverable terms prior to authoritative calculation.
+                <p className="text-xs text-[#F6F4EF]/65 mt-1">
+                  Select a scoped variant, deliverable quantity, and optional add-ons for each selected service.
                 </p>
               </div>
 
-              <div className="border border-brand-border rounded-2xl overflow-hidden">
-                <table className="w-full text-left text-xs font-mono">
-                  <thead className="bg-brand-surface border-b border-brand-border text-brand-muted uppercase text-[10px]">
-                    <tr>
-                      <th className="p-3">Service Code</th>
-                      <th className="p-3">Service Title</th>
-                      <th className="p-3">Qty</th>
-                      <th className="p-3">Format</th>
-                      <th className="p-3">Rush</th>
-                      <th className="p-3">Turnaround</th>
-                      <th className="p-3">Revisions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-brand-border/60">
-                    {selectedServices.map((sid) => {
-                      const srv = serviceMap.get(sid);
-                      const cfg = serviceConfigs[sid] || { quantity: 1, rush: false };
-                      return (
-                        <tr key={sid} className="hover:bg-brand-surface/40">
-                          <td className="p-3 font-bold text-brand-highlight">
-                            {sid}
-                          </td>
-                          <td className="p-3 text-brand-light font-sans font-medium">
-                            {srv?.title}
-                          </td>
-                          <td className="p-3 text-brand-light">{cfg.quantity}</td>
-                          <td className="p-3 text-brand-muted text-[11px]">
-                            {cfg.format || "Standard"}
-                          </td>
-                          <td className="p-3">
-                            {cfg.rush ? (
-                              <span className="text-amber-400 font-bold">YES (×1.35)</span>
-                            ) : (
-                              <span className="text-brand-muted">Standard</span>
-                            )}
-                          </td>
-                          <td className="p-3 text-brand-light">
-                            {cfg.rush ? Math.max(1, Math.ceil((srv?.days || 2) * 0.5)) : srv?.days}d
-                          </td>
-                          <td className="p-3 text-brand-light">
-                            {srv?.revisions} Rounds
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+              {selectedServiceIds.map((id) => {
+                const srv = services.find((s) => s.id === id);
+                if (!srv) return null;
+                const cfg = serviceConfigs[id] || {
+                  quantity: 1,
+                  rush: false,
+                };
+                const schema = getServiceConfigSchema(srv.id);
+                const srvVariants = variants.filter(
+                  (v) => v.serviceId === srv.id
+                );
+                const compatibleAddonIds = serviceAddOnsMap[id] || [];
+                const compatibleAddons = addOns.filter((a) =>
+                  compatibleAddonIds.includes(a.id)
+                );
+                const chosenAddons = selectedAddOns[id] || [];
 
-              <div className="p-4 rounded-xl bg-brand-surface border border-brand-border text-xs text-brand-muted space-y-2">
-                <span className="font-bold text-brand-light font-mono block">
-                  Production & Licensing Safeguards:
-                </span>
-                <ul className="list-disc list-inside space-y-1 text-[11px]">
-                  <li>Included revision quotas are strictly bounded per service to ensure schedule integrity.</li>
-                  <li>Full commercial usage rights granted upon verified settlement.</li>
-                  <li>Real asset archives (.ZIP) generated upon final client review and sign-off.</li>
-                </ul>
-              </div>
+                const expressPreflight = evaluateExpress10MinEligibility({
+                  serviceId: srv.id,
+                  sourceFilesReady: cfg.sourceFilesReady,
+                  singleMicroEditConfirmed: cfg.singleMicroEditConfirmed,
+                });
 
-              <div className="flex items-center justify-between pt-4 border-t border-brand-border">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentStep(4)}
-                  className="font-mono text-xs"
-                >
-                  &larr; Back
-                </Button>
-                <Button
-                  onClick={() => setCurrentStep(6)}
-                  className="cyber-glow bg-brand-highlight hover:bg-brand-highlight/90 text-brand-black font-semibold font-mono text-xs px-6"
-                >
-                  Calculate Authoritative Pricing &rarr;
-                </Button>
-              </div>
-            </div>
-          )}
-
-          {/* STEP 6: PRICING & QUOTATION */}
-          {currentStep === 6 && (
-            <div className="glass-panel p-6 sm:p-8 rounded-3xl border border-brand-border space-y-6">
-              <div>
-                <h2 className="text-xl font-black text-brand-light tracking-tight">
-                  6. Server-Authoritative Quotation & Pricing
-                </h2>
-                <p className="text-xs text-brand-muted mt-1 font-mono">
-                  Calculated deterministically via studio commercial rules.
-                </p>
-              </div>
-
-              <div className="p-6 rounded-2xl bg-brand-surface border border-brand-border space-y-4 font-mono text-xs">
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-brand-muted">Scope Subtotal:</span>
-                  <span className="text-brand-light font-bold">
-                    {currency === "BDT"
-                      ? `৳ ${pricingSummary.subtotalBDT.toLocaleString()}`
-                      : `$ ${pricingSummary.subtotalUSD.toLocaleString()}`}
-                  </span>
-                </div>
-
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-brand-muted">Rush Delivery Surcharges:</span>
-                  <span className="text-amber-400 font-bold">
-                    {pricingSummary.rushSurchargeBDT > 0 || pricingSummary.rushSurchargeUSD > 0
-                      ? currency === "BDT"
-                        ? `+৳ ${pricingSummary.rushSurchargeBDT.toLocaleString()}`
-                        : `+$ ${pricingSummary.rushSurchargeUSD.toLocaleString()}`
-                      : "—"}
-                  </span>
-                </div>
-
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-brand-muted">Specialized Add-ons Total:</span>
-                  <span className="text-brand-highlight font-bold">
-                    {pricingSummary.addOnsTotalBDT > 0 || pricingSummary.addOnsTotalUSD > 0
-                      ? currency === "BDT"
-                        ? `+৳ ${pricingSummary.addOnsTotalBDT.toLocaleString()}`
-                        : `+$ ${pricingSummary.addOnsTotalUSD.toLocaleString()}`
-                      : "—"}
-                  </span>
-                </div>
-
-                <div className="pt-4 border-t border-brand-border flex justify-between items-baseline text-base">
-                  <span className="font-bold text-brand-light">Total Investment:</span>
-                  <span className="text-2xl font-black text-emerald-400">
-                    {currency === "BDT"
-                      ? `৳ ${pricingSummary.finalBDT.toLocaleString()}`
-                      : `$ ${pricingSummary.finalUSD.toLocaleString()}`}
-                  </span>
-                </div>
-              </div>
-
-              {/* Quotation Required Notice */}
-              {pricingSummary.quoteRequired && (
-                <div className="p-5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-xs space-y-2">
-                  <div className="text-amber-400 font-bold font-mono">
-                    Formal Studio Quotation Required
-                  </div>
-                  <p className="text-brand-muted text-[11px]">
-                    This package requires formal quotation desk review due to commercial governance policies:
-                  </p>
-                  <ul className="list-disc list-inside space-y-1 text-amber-300/90 text-[11px]">
-                    {pricingSummary.quoteReasons.map((r, i) => (
-                      <li key={i}>{r}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              <div className="flex items-center justify-between pt-4 border-t border-brand-border">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentStep(5)}
-                  className="font-mono text-xs"
-                >
-                  &larr; Back
-                </Button>
-                <Button
-                  onClick={() => setCurrentStep(7)}
-                  className="cyber-glow bg-brand-highlight hover:bg-brand-highlight/90 text-brand-black font-semibold font-mono text-xs px-6"
-                >
-                  Proceed to Launch Action &rarr;
-                </Button>
-              </div>
-            </div>
-          )}
-
-          {/* STEP 7: VERIFIED CHECKOUT OR QUOTE LODGING */}
-          {currentStep === 7 && (
-            <div className="glass-panel p-6 sm:p-8 rounded-3xl border border-brand-border space-y-6">
-              <div>
-                <h2 className="text-xl font-black text-brand-light tracking-tight">
-                  7. Verified Launch, Quotation or Checkout
-                </h2>
-                <p className="text-xs text-brand-muted mt-1 font-mono">
-                  Confirm your delivery terms, lodge formal review, or launch via verified sandbox payment adapters.
-                </p>
-              </div>
-
-              {pricingSummary.quoteRequired ? (
-                <div className="p-6 rounded-2xl bg-brand-surface border border-brand-border space-y-4">
-                  <div className="space-y-1">
-                    <h3 className="font-bold text-sm text-brand-light font-mono">
-                      Request Formal Studio Quotation
-                    </h3>
-                    <p className="text-xs text-brand-muted">
-                      Your assembled package will be directly submitted to Studio Operations. An approved formal quote with commercial milestones and timeline guarantees will be issued to your portal within 24 hours.
-                    </p>
-                  </div>
-
-                  <Button
-                    onClick={handleRequestQuote}
-                    disabled={isPending}
-                    className="w-full cyber-glow bg-brand-highlight hover:bg-brand-highlight/90 text-brand-black font-semibold font-mono text-sm py-6"
+                return (
+                  <div
+                    key={id}
+                    className="p-5 rounded-xl border border-[#232528] bg-[#090A0A]/80 space-y-5"
                   >
-                    {isPending ? "Lodging Quotation..." : "Lodge Formal Quotation Request"}
-                  </Button>
+                    <div className="flex items-center justify-between border-b border-[#232528] pb-3">
+                      <span className="font-semibold text-base text-[#F6F4EF]">
+                        <span className="font-mono text-[#D9BD81] mr-2">
+                          {srv.id}
+                        </span>
+                        {srv.title}
+                      </span>
+                      <span className="text-xs font-mono text-[#D9BD81]">
+                        Base: {srv.estimated_hours || 4}h ({symbol}
+                        {(currency === "BDT"
+                          ? srv.base_bdt
+                          : srv.base_usd
+                        ).toLocaleString()}
+                        )
+                      </span>
+                    </div>
+
+                    {/* Scoped Variant Selection */}
+                    {srvVariants.length > 0 && (
+                      <div className="space-y-2">
+                        <label className="text-xs font-mono uppercase text-[#D9BD81] block">
+                          Scoped Service Variant
+                        </label>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              updateConfig(id, { variantId: undefined })
+                            }
+                            className={`text-left p-2.5 rounded-lg border text-xs ${
+                              !cfg.variantId
+                                ? "border-[#D9BD81] bg-[#D9BD81]/15 text-[#F6F4EF]"
+                                : "border-[#232528] bg-[#121315] text-[#F6F4EF]/70"
+                            }`}
+                          >
+                            <div className="font-mono font-bold">
+                              Standard Base Scope ({srv.estimated_hours}h)
+                            </div>
+                          </button>
+                          {srvVariants.map((v) => (
+                            <button
+                              key={v.id}
+                              type="button"
+                              onClick={() =>
+                                updateConfig(id, { variantId: v.id })
+                              }
+                              className={`text-left p-2.5 rounded-lg border text-xs ${
+                                cfg.variantId === v.id
+                                  ? "border-[#D9BD81] bg-[#D9BD81]/15 text-[#F6F4EF]"
+                                  : "border-[#232528] bg-[#121315] text-[#F6F4EF]/70"
+                              }`}
+                            >
+                              <div className="flex justify-between font-mono">
+                                <span className="text-[#D9BD81] font-bold">
+                                  {v.id}
+                                </span>
+                                <span>{v.estimatedHours}h</span>
+                              </div>
+                              <div className="font-medium mt-0.5">
+                                {v.title}
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Format & Quantity */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-xs font-mono text-[#F6F4EF]/65 block mb-1.5">
+                          {schema.quantityLabel}
+                        </label>
+                        <Input
+                          type="number"
+                          min={1}
+                          max={50}
+                          value={cfg.quantity || 1}
+                          onChange={(e) =>
+                            updateConfig(id, {
+                              quantity: Math.max(
+                                1,
+                                parseInt(e.target.value, 10) || 1
+                              ),
+                            })
+                          }
+                          className="bg-[#121315] border-[#232528] h-9 text-xs font-mono text-[#F6F4EF]"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-mono text-[#F6F4EF]/65 block mb-1.5">
+                          Deliverable Format
+                        </label>
+                        <select
+                          value={cfg.format || schema.formatOptions[0]}
+                          onChange={(e) =>
+                            updateConfig(id, { format: e.target.value })
+                          }
+                          className="w-full h-9 rounded-md border border-[#232528] bg-[#121315] px-3 text-xs font-mono text-[#F6F4EF]"
+                        >
+                          {schema.formatOptions.map((opt) => (
+                            <option key={opt} value={opt}>
+                              {opt}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* 10-Min Express Delivery Preflight Guard */}
+                    {schema.express10MinEligible && (
+                      <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3.5 space-y-2.5 text-xs">
+                        <div className="font-mono text-[11px] font-bold text-emerald-300 uppercase">
+                          10-Minute Express Micro-Edit Preflight ({srv.id})
+                        </div>
+                        <p className="text-[#F6F4EF]/70 text-[11px]">
+                          {schema.expressRule}
+                        </p>
+                        <div className="flex flex-col sm:flex-row gap-3 pt-1">
+                          <label className="flex items-center gap-2 cursor-pointer text-[11px]">
+                            <input
+                              type="checkbox"
+                              checked={Boolean(cfg.sourceFilesReady)}
+                              onChange={(e) =>
+                                updateConfig(id, {
+                                  sourceFilesReady: e.target.checked,
+                                })
+                              }
+                              className="accent-[#D9BD81]"
+                            />
+                            <span>Open source file ready</span>
+                          </label>
+                          <label className="flex items-center gap-2 cursor-pointer text-[11px]">
+                            <input
+                              type="checkbox"
+                              checked={Boolean(cfg.singleMicroEditConfirmed)}
+                              onChange={(e) =>
+                                updateConfig(id, {
+                                  singleMicroEditConfirmed: e.target.checked,
+                                })
+                              }
+                              className="accent-[#D9BD81]"
+                            />
+                            <span>Single micro-edit confirmed</span>
+                          </label>
+                        </div>
+                        <div className="font-mono text-[11px] pt-1">
+                          Status:{" "}
+                          {expressPreflight.eligible ? (
+                            <span className="text-emerald-400 font-bold">
+                              PREFLIGHT PASSED — Eligible for 10-Min Express Slot
+                            </span>
+                          ) : (
+                            <span className="text-amber-300">
+                              Standard Queue ({expressPreflight.reasons[0]})
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Compatible Add-ons (from the 14 Canonical Add-ons) */}
+                    <div className="space-y-2">
+                      <label className="text-xs font-mono uppercase text-[#D9BD81] block">
+                        Compatible Add-ons ({compatibleAddons.length})
+                      </label>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {compatibleAddons.map((addon) => {
+                          const checked = chosenAddons.includes(addon.id);
+                          const price =
+                            currency === "BDT"
+                              ? addon.unit_price_bdt
+                              : addon.unit_price_usd;
+                          return (
+                            <button
+                              type="button"
+                              key={addon.id}
+                              onClick={() => toggleAddOn(id, addon.id)}
+                              className={`text-left p-2.5 rounded-lg border text-xs flex items-center justify-between gap-2 ${
+                                checked
+                                  ? "border-[#D9BD81] bg-[#D9BD81]/15 text-[#F6F4EF]"
+                                  : "border-[#232528] bg-[#121315] text-[#F6F4EF]/70"
+                              }`}
+                            >
+                              <span className="truncate">
+                                <strong className="font-mono text-[#D9BD81] mr-1">
+                                  {addon.id}
+                                </strong>
+                                {addon.label}
+                              </span>
+                              <span className="font-mono text-[#D9BD81] shrink-0">
+                                +{symbol}
+                                {price.toLocaleString()}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* STEP 2: Smart Project Brief & Launch Promo Date */}
+          {step === 2 && (
+            <div className="space-y-5">
+              <div>
+                <h2 className="text-xl font-bold text-[#F6F4EF]">
+                  3. Smart Creative Brief &amp; Launch Window Check
+                </h2>
+                <p className="text-xs text-[#F6F4EF]/65 mt-1">
+                  Provide your brand context and deliverable objective so our Human Creative Lead and SI Assistant can scope accurately.
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label
+                    htmlFor="brief-brand-name"
+                    className="text-xs font-mono text-[#F6F4EF] block mb-1.5"
+                  >
+                    Brand / Company Name *
+                  </label>
+                  <Input
+                    id="brief-brand-name"
+                    placeholder="e.g., Sylhet Botanicals or Veloce Audio"
+                    value={brief.brandName}
+                    onChange={(e) =>
+                      setBrief({ ...brief, brandName: e.target.value })
+                    }
+                    className="bg-[#090A0A] border-[#232528] text-[#F6F4EF]"
+                  />
                 </div>
-              ) : (
+
+                <div>
+                  <label
+                    htmlFor="brief-objective"
+                    className="text-xs font-mono text-[#F6F4EF] block mb-1.5"
+                  >
+                    Project Objective &amp; Deliverable Goals *
+                  </label>
+                  <textarea
+                    id="brief-objective"
+                    rows={4}
+                    placeholder="Describe your product, visual direction, required dimensions, and commercial goals..."
+                    value={brief.objective}
+                    onChange={(e) =>
+                      setBrief({ ...brief, objective: e.target.value })
+                    }
+                    className="w-full rounded-md border border-[#232528] bg-[#090A0A] p-3 text-xs text-[#F6F4EF] focus:outline-none"
+                  />
+                </div>
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {/* SSLCOMMERZ Hosted Card */}
-                  <div
-                    onClick={() => handleStartCheckout("sslcommerz")}
-                    className="p-5 rounded-2xl bg-brand-surface border border-brand-border hover:border-brand-highlight/60 cursor-pointer transition-all space-y-3 group"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-mono font-bold text-emerald-400">
-                        SSLCOMMERZ Hosted
-                      </span>
-                      <Badge variant="outline" className="text-[10px] font-mono text-brand-muted">
-                        BD Local Rails
-                      </Badge>
-                    </div>
-                    <p className="text-xs text-brand-muted">
-                      Settle via bKash, Nagad, Rocket, DBBL Nexus or local Visa/Mastercard cards.
-                    </p>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full text-xs font-mono group-hover:bg-brand-highlight group-hover:text-brand-black group-hover:font-semibold group-hover:border-transparent transition-all"
+                  <div>
+                    <label
+                      htmlFor="brief-audience"
+                      className="text-xs font-mono text-[#F6F4EF] block mb-1.5"
                     >
-                      Checkout with SSLCOMMERZ
-                    </Button>
+                      Target Audience &amp; Market
+                    </label>
+                    <Input
+                      id="brief-audience"
+                      placeholder="e.g., D2C consumers in Dhaka & global diaspora"
+                      value={brief.audience}
+                      onChange={(e) =>
+                        setBrief({ ...brief, audience: e.target.value })
+                      }
+                      className="bg-[#090A0A] border-[#232528] text-[#F6F4EF]"
+                    />
                   </div>
-
-                  {/* Stripe Hosted Card */}
-                  <div
-                    onClick={() => handleStartCheckout("stripe")}
-                    className="p-5 rounded-2xl bg-brand-surface border border-brand-border hover:border-brand-highlight/60 cursor-pointer transition-all space-y-3 group"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-mono font-bold text-brand-highlight">
-                        Stripe International
-                      </span>
-                      <Badge variant="outline" className="text-[10px] font-mono text-brand-muted">
-                        USD Global
-                      </Badge>
-                    </div>
-                    <p className="text-xs text-brand-muted">
-                      Settle via International Credit Card (Visa, MasterCard, Amex) in USD.
-                    </p>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full text-xs font-mono group-hover:bg-brand-highlight group-hover:text-brand-black group-hover:font-semibold group-hover:border-transparent transition-all"
+                  <div>
+                    <label
+                      htmlFor="brief-platforms"
+                      className="text-xs font-mono text-[#F6F4EF] block mb-1.5"
                     >
-                      Checkout with Stripe
-                    </Button>
+                      Target Channels &amp; Formats
+                    </label>
+                    <Input
+                      id="brief-platforms"
+                      value={brief.platforms}
+                      onChange={(e) =>
+                        setBrief({ ...brief, platforms: e.target.value })
+                      }
+                      className="bg-[#090A0A] border-[#232528] text-[#F6F4EF]"
+                    />
                   </div>
                 </div>
-              )}
 
-              <div className="flex items-center justify-between pt-4 border-t border-brand-border">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentStep(6)}
-                  className="font-mono text-xs"
-                >
-                  &larr; Back
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleSaveDraft}
-                  className="font-mono text-xs text-brand-muted hover:text-brand-light"
-                >
-                  Save Draft for Later
-                </Button>
+                <div className="rounded-xl border border-[#232528] bg-[#090A0A] p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <span className="font-mono text-xs font-bold text-[#D9BD81] block">
+                      5% Launch Promotion Window (20 Nov &ndash; 15 Dec 2026
+                      Asia/Dhaka)
+                    </span>
+                    <span className="text-[11px] text-[#F6F4EF]/65">
+                      Verify how the 5% launch discount applies based on booking date:
+                    </span>
+                  </div>
+                  <input
+                    type="date"
+                    value={promoEvaluationDate}
+                    onChange={(e) => setPromoEvaluationDate(e.target.value)}
+                    className="rounded border border-[#232528] bg-[#121315] px-3 py-1.5 font-mono text-xs text-[#F6F4EF]"
+                  />
+                </div>
               </div>
             </div>
           )}
+
+          {/* STEP 3: Final Review & Submission */}
+          {step === 3 && (
+            <div className="space-y-6">
+              <div>
+                <h2 className="text-xl font-bold text-[#F6F4EF]">
+                  4. Review Scoped Hourly Summary &amp; Submit
+                </h2>
+                <p className="text-xs text-[#F6F4EF]/65 mt-1">
+                  All monetary totals are verified server-side from our canonical 13-service hourly ratebook.
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-[#232528] bg-[#090A0A] p-4 space-y-2 text-xs font-mono">
+                <div className="flex justify-between">
+                  <span className="text-[#F6F4EF]/60">Brand Name:</span>
+                  <span className="text-[#F6F4EF]">
+                    {brief.brandName || "Not entered"}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[#F6F4EF]/60">Total Scoped Hours:</span>
+                  <span className="text-[#D9BD81] font-bold">
+                    {pricing.totalScopedHours} Hours
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[#F6F4EF]/60">Revision Policy:</span>
+                  <span className="text-[#F6F4EF]">
+                    2 Consolidated Revision Rounds Included
+                  </span>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <label className="text-xs font-mono uppercase text-[#F6F4EF]/65 block">
+                  Select Settlement Channel
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setGateway("sslcommerz")}
+                    className={`p-4 rounded-xl border text-left ${
+                      gateway === "sslcommerz"
+                        ? "border-[#D9BD81] bg-[#D9BD81]/15"
+                        : "border-[#232528] bg-[#090A0A]"
+                    }`}
+                  >
+                    <p className="font-mono text-xs font-bold text-[#F6F4EF]">
+                      SSLCommerz (BDT Local Gateways)
+                    </p>
+                    <p className="text-[11px] text-[#F6F4EF]/65 mt-1">
+                      bKash, Nagad, Local Visa/Mastercard &amp; Net Banking
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setGateway("stripe")}
+                    className={`p-4 rounded-xl border text-left ${
+                      gateway === "stripe"
+                        ? "border-[#D9BD81] bg-[#D9BD81]/15"
+                        : "border-[#232528] bg-[#090A0A]"
+                    }`}
+                  >
+                    <p className="font-mono text-xs font-bold text-[#F6F4EF]">
+                      Stripe Global (USD / International)
+                    </p>
+                    <p className="text-[11px] text-[#F6F4EF]/65 mt-1">
+                      International Cards, Apple Pay &amp; Corporate Billing
+                    </p>
+                  </button>
+                </div>
+              </div>
+
+              <div className="pt-4 flex flex-col sm:flex-row gap-3">
+                <Button
+                  type="button"
+                  disabled={isSubmitting}
+                  onClick={() => handleComplete("quote")}
+                  className="flex-1 cyber-glow bg-[#D9BD81] hover:bg-[#D9BD81]/90 text-[#090A0A] font-semibold font-mono text-xs h-11"
+                >
+                  {isSubmitting
+                    ? "Submitting Smart Brief..."
+                    : "Submit Smart Brief & Request Studio Quote →"}
+                </Button>
+                {!pricing.quoteRequired && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={isSubmitting}
+                    onClick={() => handleComplete("checkout")}
+                    className="font-mono text-xs h-11 border-[#232528] text-[#F6F4EF]"
+                  >
+                    Proceed to Verified Payment ({symbol}
+                    {(currency === "BDT"
+                      ? pricing.finalBDT
+                      : pricing.finalUSD
+                    ).toLocaleString()}
+                    )
+                  </Button>
+                )}
+              </div>
+
+              {!isAuthenticated && (
+                <p className="text-[11px] font-mono text-[#F6F4EF]/60 text-center">
+                  Note: Your Smart Brief configuration is saved locally. Clicking submit will prompt you to sign in or register so your project is linked to your Client Office.
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Step Navigation Footer */}
+          <div className="flex items-center justify-between pt-6 border-t border-[#232528]">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={step === 0}
+              onClick={() => setStep((s) => Math.max(0, s - 1))}
+              className="font-mono text-xs border-[#232528] text-[#F6F4EF]"
+            >
+              &larr; Previous Step
+            </Button>
+
+            {step < STEPS.length - 1 && (
+              <Button
+                type="button"
+                onClick={() => setStep((s) => Math.min(STEPS.length - 1, s + 1))}
+                className="bg-[#D9BD81] hover:bg-[#D9BD81]/90 text-[#090A0A] font-semibold font-mono text-xs"
+              >
+                Next Step &rarr;
+              </Button>
+            )}
+          </div>
         </div>
 
-        {/* Sidebar Summary Snapshot */}
-        <div className="lg:col-span-4 space-y-6">
-          <div className="glass-panel p-6 rounded-2xl border border-brand-border space-y-5 sticky top-24 cyber-glow">
-            <div className="flex items-center justify-between border-b border-brand-border/60 pb-3">
-              <span className="text-xs font-mono uppercase text-brand-muted">
-                Package Scope
-              </span>
-              <span className="badge-mono text-brand-highlight text-[11px] font-bold">
-                {selectedServices.length} Service(s)
-              </span>
-            </div>
+        {/* Live Authoritative Hourly Summary Ledger */}
+        <div className="rounded-2xl border border-[#D9BD81]/40 bg-[#121315] p-6 space-y-5 sticky top-24">
+          <div className="flex items-center justify-between border-b border-[#232528] pb-3">
+            <h3 className="font-mono text-xs uppercase tracking-wider text-[#D9BD81]">
+              Live Hourly Scope Ledger
+            </h3>
+            <span className="text-xs font-mono text-[#F6F4EF]/75">
+              {pricing.totalScopedHours}h Scoped
+            </span>
+          </div>
 
-            <div className="space-y-2">
-              <span className="text-[11px] font-mono text-brand-muted block uppercase">
-                Selected Disciplines
-              </span>
-              <div className="space-y-1.5 max-h-48 overflow-y-auto cyber-scrollbar pr-1">
-                {selectedServices.map((sid) => {
-                  const srv = serviceMap.get(sid);
-                  const cfg = serviceConfigs[sid];
-                  return (
-                    <div
-                      key={sid}
-                      className="p-2.5 rounded-xl bg-brand-surface/70 border border-brand-border text-xs flex items-center justify-between"
-                    >
-                      <div className="space-y-0.5">
-                        <span className="font-mono font-bold text-brand-highlight mr-2 text-[11px]">
-                          {sid}
+          {pricing.items.length === 0 ? (
+            <p className="text-xs text-[#F6F4EF]/60 py-6 text-center font-mono">
+              No services selected yet.
+            </p>
+          ) : (
+            <ul className="space-y-3 max-h-72 overflow-y-auto pr-1 divide-y divide-[#232528] text-xs">
+              {pricing.items.map((item) => {
+                const lineVal =
+                  currency === "BDT" ? item.lineTotalBDT : item.lineTotalUSD;
+                return (
+                  <li key={item.serviceId} className="pt-2.5 first:pt-0 space-y-1">
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="font-medium text-[#F6F4EF]">
+                        <span className="font-mono text-[#D9BD81] mr-1.5">
+                          {item.serviceId}
                         </span>
-                        <span className="text-brand-light text-xs font-medium">
-                          {srv?.title}
-                        </span>
-                        <span className="block text-[10px] text-brand-muted font-mono">
-                          Qty: {cfg?.quantity || 1} {cfg?.rush ? "• RUSH" : ""}
-                        </span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => toggleService(sid)}
-                        className="text-brand-muted hover:text-brand-danger text-xs font-mono ml-2"
-                        title="Remove service"
-                      >
-                        ✕
-                      </button>
+                        {item.title}
+                      </span>
+                      <span className="font-mono font-semibold text-[#F6F4EF]">
+                        {symbol}
+                        {lineVal.toLocaleString()}
+                      </span>
                     </div>
-                  );
-                })}
-              </div>
-            </div>
+                    <div className="flex flex-wrap gap-2 text-[10px] font-mono text-[#F6F4EF]/60">
+                      <span>Qty: {item.quantity}</span>
+                      <span>&bull; {item.scopedHours}h</span>
+                      {item.variantId && (
+                        <span className="text-[#D9BD81]">
+                          &bull; Variant {item.variantId}
+                        </span>
+                      )}
+                      {item.selectedAddOns.length > 0 && (
+                        <span>
+                          &bull; +{item.selectedAddOns.length} add-on(s)
+                        </span>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
 
-            <div className="divide-y divide-brand-border/60 border-t border-b border-brand-border/60 py-3 space-y-2 font-mono text-xs">
-              <div className="flex justify-between">
-                <span className="text-brand-muted">Gross Scope:</span>
-                <span className="text-brand-light font-semibold">
-                  {currency === "BDT"
-                    ? `৳ ${pricingSummary.subtotalBDT.toLocaleString()}`
-                    : `$ ${pricingSummary.subtotalUSD.toLocaleString()}`}
-                </span>
-              </div>
-              <div className="flex justify-between pt-2">
-                <span className="text-brand-muted">Rush Surcharges:</span>
-                <span className="text-brand-light font-semibold">
-                  {pricingSummary.rushSurchargeBDT > 0 || pricingSummary.rushSurchargeUSD > 0
-                    ? currency === "BDT"
-                      ? `+৳ ${pricingSummary.rushSurchargeBDT.toLocaleString()}`
-                      : `+$ ${pricingSummary.rushSurchargeUSD.toLocaleString()}`
-                    : "—"}
-                </span>
-              </div>
-              <div className="flex justify-between pt-2">
-                <span className="text-brand-muted">Add-ons:</span>
-                <span className="text-brand-light font-semibold">
-                  {pricingSummary.addOnsTotalBDT > 0 || pricingSummary.addOnsTotalUSD > 0
-                    ? currency === "BDT"
-                      ? `+৳ ${pricingSummary.addOnsTotalBDT.toLocaleString()}`
-                      : `+$ ${pricingSummary.addOnsTotalUSD.toLocaleString()}`
-                    : "—"}
-                </span>
-              </div>
-            </div>
-
-            <div className="flex items-baseline justify-between font-mono">
-              <span className="text-xs text-brand-muted uppercase">Final Total</span>
-              <span className="text-2xl font-black text-emerald-400">
-                {currency === "BDT"
-                  ? `৳ ${pricingSummary.finalBDT.toLocaleString()}`
-                  : `$ ${pricingSummary.finalUSD.toLocaleString()}`}
+          <div className="border-t border-[#232528] pt-4 space-y-2 text-xs font-mono">
+            <div className="flex justify-between text-[#F6F4EF]/70">
+              <span>Base Scoped Subtotal</span>
+              <span>
+                {symbol}
+                {(currency === "BDT"
+                  ? pricing.subtotalBDT
+                  : pricing.subtotalUSD
+                ).toLocaleString()}
               </span>
             </div>
-
-            {pricingSummary.quoteRequired ? (
-              <Badge
-                variant="outline"
-                className="w-full justify-center py-1 font-mono text-[11px] border-amber-500/40 text-amber-400 bg-amber-500/10"
-              >
-                Quote Desk Review Required
-              </Badge>
-            ) : (
-              <Badge
-                variant="outline"
-                className="w-full justify-center py-1 font-mono text-[11px] border-emerald-500/40 text-emerald-400 bg-emerald-500/10"
-              >
-                Instant Launch Eligible
-              </Badge>
+            <div className="flex justify-between text-[#F6F4EF]/70">
+              <span>Compatible Add-ons</span>
+              <span>
+                {symbol}
+                {(currency === "BDT"
+                  ? pricing.addOnsTotalBDT
+                  : pricing.addOnsTotalUSD
+                ).toLocaleString()}
+              </span>
+            </div>
+            {pricing.promoActive && (
+              <div className="flex justify-between text-emerald-400">
+                <span>5% Launch Promo (20 Nov–15 Dec)</span>
+                <span>
+                  -{symbol}
+                  {(currency === "BDT"
+                    ? pricing.promoDiscountBDT || 0
+                    : pricing.promoDiscountUSD || 0
+                  ).toLocaleString()}
+                </span>
+              </div>
             )}
+            <div className="flex justify-between text-base font-bold text-[#D9BD81] pt-2 border-t border-[#232528]">
+              <span>Estimated Total</span>
+              <span>
+                {symbol}
+                {(currency === "BDT"
+                  ? pricing.finalBDT
+                  : pricing.finalUSD
+                ).toLocaleString()}
+              </span>
+            </div>
           </div>
         </div>
       </div>
-
-      {/* Verified Hosted Checkout Modal */}
-      {isCheckoutModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
-          <div className="glass-panel w-full max-w-md p-6 sm:p-8 rounded-3xl border border-brand-border shadow-2xl space-y-6 cyber-glow">
-            <div className="flex items-center justify-between border-b border-brand-border pb-3">
-              <h3 className="font-bold text-sm text-brand-light font-mono uppercase">
-                {checkoutGateway.toUpperCase()} Hosted Checkout Adapter
-              </h3>
-              <button
-                type="button"
-                onClick={() => setIsCheckoutModalOpen(false)}
-                className="text-brand-muted hover:text-brand-light text-sm font-mono"
-              >
-                ✕
-              </button>
-            </div>
-
-            {checkoutPhase === "select" && (
-              <div className="space-y-4 text-xs font-mono">
-                <div className="p-4 rounded-xl bg-brand-surface border border-brand-border flex justify-between items-baseline">
-                  <span className="text-brand-muted">Total Scope Investment:</span>
-                  <span className="text-xl font-bold text-emerald-400">
-                    {currency === "BDT"
-                      ? `৳ ${pricingSummary.finalBDT.toLocaleString()}`
-                      : `$ ${pricingSummary.finalUSD.toLocaleString()}`}
-                  </span>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-brand-muted uppercase text-[10px] block">
-                    Settlement Payment Channel
-                  </label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {["bKash", "Nagad", "Rocket", "DBBL Card", "Visa", "Mastercard"].map(
-                      (ch) => (
-                        <button
-                          key={ch}
-                          type="button"
-                          onClick={() => setSettlementChannel(ch)}
-                          className={`p-2.5 rounded-xl border text-center font-mono font-bold transition-all ${
-                            settlementChannel === ch
-                              ? "bg-brand-light text-brand-black border-white"
-                              : "bg-brand-surface border-brand-border text-brand-muted hover:text-brand-light"
-                          }`}
-                        >
-                          {ch}
-                        </button>
-                      )
-                    )}
-                  </div>
-                </div>
-
-                <div className="p-3.5 rounded-xl bg-brand-highlight/10 border border-brand-highlight/30 text-brand-highlight text-[11px] font-mono">
-                  PCI-DSS Level 1 Hosted Architecture: No card or banking PINs are ever collected on Freakin&apos;s Studio servers.
-                </div>
-
-                <Button
-                  onClick={handleConfirmCheckoutPayment}
-                  className="w-full cyber-glow bg-brand-highlight hover:bg-brand-highlight/90 text-brand-black font-semibold font-mono text-sm py-5"
-                >
-                  Launch Payment Simulation &rarr;
-                </Button>
-              </div>
-            )}
-
-            {checkoutPhase === "redirecting" && (
-              <div className="py-8 text-center space-y-4">
-                <div className="w-10 h-10 border-2 border-brand-highlight border-t-transparent rounded-full animate-spin mx-auto" />
-                <p className="text-xs font-mono text-brand-light">
-                  Initiating server-side session with {checkoutGateway.toUpperCase()}...
-                </p>
-              </div>
-            )}
-
-            {checkoutPhase === "verifying" && (
-              <div className="py-8 text-center space-y-4">
-                <div className="w-10 h-10 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin mx-auto" />
-                <p className="text-xs font-mono text-emerald-400">
-                  Verifying cryptographic webhook payload & transaction status...
-                </p>
-              </div>
-            )}
-
-            {checkoutPhase === "success" && (
-              <div className="py-6 text-center space-y-4">
-                <div className="w-12 h-12 bg-emerald-500/20 text-emerald-400 rounded-full flex items-center justify-center mx-auto text-xl font-bold">
-                  ✓
-                </div>
-                <div>
-                  <h4 className="font-bold text-base text-brand-light font-mono">
-                    Payment Verified Successfully
-                  </h4>
-                  <p className="text-xs text-brand-muted font-mono mt-1">
-                    Order Ref: {completedOrderData?.orderRef}
-                  </p>
-                  <p className="text-[11px] text-brand-muted font-mono">
-                    Tx ID: {completedOrderData?.txId}
-                  </p>
-                </div>
-
-                <Button
-                  onClick={() => {
-                    setIsCheckoutModalOpen(false);
-                    router.push("/dashboard");
-                  }}
-                  className="cyber-glow bg-brand-highlight hover:bg-brand-highlight/90 text-brand-black font-semibold font-mono text-xs w-full py-5"
-                >
-                  Enter Project Workspace & Complete Brief &rarr;
-                </Button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
