@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { isAdminRole } from "@/lib/permissions/roles";
 import {
   ProjectWorkspaceClient,
   type WorkspaceAsset,

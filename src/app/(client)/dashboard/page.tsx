@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
+import Link from "next/link";
+import { redirect } from "next/navigation";
 import { getCurrentProfile } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
-import { DashboardClient } from "./dashboard-client";
 
 export const metadata: Metadata = {
-  title: "Dashboard Workspace — Freakin's Studio",
-  description: "Manage your active creative production projects, formal quotations and settled invoices.",
+  title: "My Projects — Freakin's Studio",
+  description: "Track real creative production projects, progress, briefs and review tasks.",
 };
 
 export const instant = false;
