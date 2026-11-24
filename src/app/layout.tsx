@@ -3,6 +3,7 @@ import { Lato, Noto_Sans_Bengali, JetBrains_Mono } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
 import { ServiceWorkerRegister } from "@/components/pwa/sw-register";
 import { I18nProvider } from "@/lib/i18n/context";
+import { getSafeAppUrl } from "@/lib/url";
 import "./globals.css";
 
 const latoSans = Lato({
@@ -31,9 +32,7 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  metadataBase: new URL(
-    process.env.NEXT_PUBLIC_APP_URL || "https://freakinstudio.space"
-  ),
+  metadataBase: getSafeAppUrl(process.env.NEXT_PUBLIC_APP_URL),
   title: {
     default:
       "Freakin's Studio — Creative Office OS 2.0 | DESIGN. CREATE. PRODUCE. GROW.",

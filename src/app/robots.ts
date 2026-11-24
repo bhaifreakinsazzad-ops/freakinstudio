@@ -1,7 +1,8 @@
 import type { MetadataRoute } from "next";
+import { getSafeAppOrigin } from "@/lib/url";
 
 export default function robots(): MetadataRoute.Robots {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://freakinstudio.com";
+  const baseUrl = getSafeAppOrigin(process.env.NEXT_PUBLIC_APP_URL);
 
   return {
     rules: {

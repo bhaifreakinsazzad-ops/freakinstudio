@@ -1191,8 +1191,14 @@ async function createPublicCatalogClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!url || !anon) return null;
+  try {
+    const parsed = new URL(url.trim());
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null;
+  } catch {
+    return null;
+  }
   const { createClient } = await import("@supabase/supabase-js");
-  return createClient(url, anon, {
+  return createClient(url.trim(), anon, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 }

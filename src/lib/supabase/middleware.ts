@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "@/types/database.types";
+import { isValidHttpUrl } from "@/lib/url";
 
 /** Refreshes the Supabase session cookie on every request. Must be called
  * from src/middleware.ts and the returned response must be returned
@@ -13,7 +14,7 @@ export async function updateSession(request: NextRequest) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  if (!supabaseUrl || !supabaseAnonKey) {
+  if (!isValidHttpUrl(supabaseUrl) || !supabaseAnonKey) {
     const isProtectedRoute =
       request.nextUrl.pathname.startsWith("/dashboard") ||
       request.nextUrl.pathname.startsWith("/admin");

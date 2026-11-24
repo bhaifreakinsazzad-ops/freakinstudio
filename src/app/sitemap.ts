@@ -1,12 +1,16 @@
 import type { MetadataRoute } from "next";
-import servicesJson from "../../supabase/seed/data/services.json";
+import { CANONICAL_SERVICES } from "@/lib/catalog";
+import { getSafeAppOrigin } from "@/lib/url";
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://freakinstudio.com";
+  const baseUrl = getSafeAppOrigin(process.env.NEXT_PUBLIC_APP_URL);
   const now = new Date();
 
   const staticRoutes = [
     "",
+    "/tools",
+    "/playground",
+    "/kits",
     "/services",
     "/builder",
     "/portfolio",
@@ -27,7 +31,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: route === "" ? 1.0 : 0.8,
   }));
 
-  const serviceRoutes = servicesJson.map((service) => ({
+  const serviceRoutes = CANONICAL_SERVICES.map((service) => ({
     url: `${baseUrl}/services/${service.id}`,
     lastModified: now,
     changeFrequency: "monthly" as const,
